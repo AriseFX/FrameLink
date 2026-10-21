@@ -1,6 +1,9 @@
+pub mod benchmark;
 pub mod brand;
 #[cfg(windows)]
 pub mod capture;
+#[cfg(target_os = "macos")]
+pub mod capture_macos;
 pub mod engine;
 pub mod model;
 pub mod ndi;

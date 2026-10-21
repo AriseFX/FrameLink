@@ -48,16 +48,30 @@ impl DesktopApp {
         install_style(ctx);
         let (mut config, warning) = crate::settings::load();
         let mut error = warning;
-        #[cfg(windows)]
-        let mut monitors = match crate::capture::monitors() {
-            Ok(monitors) => monitors,
-            Err(e) => {
-                error = Some(e);
-                Vec::new()
+        #[cfg(any(windows, target_os = "macos"))]
+        let mut monitors = if snapshot {
+            Vec::new()
+        } else {
+            #[cfg(windows)]
+            let result = crate::capture::monitors();
+            #[cfg(target_os = "macos")]
+            let result = crate::capture_macos::monitors();
+            match result {
+                Ok(monitors) => monitors,
+                Err(e) => {
+                    error = Some(e);
+                    Vec::new()
+                }
             }
         };
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         let mut monitors: Vec<Monitor> = Vec::new();
+        if cfg!(target_os = "macos") && !snapshot {
+            config.backend = Backend::Auto;
+            config.unlimited = false;
+            config.precision = false;
+            config.close_to_tray = false;
+        }
         if snapshot {
             config = Config::default();
             error = None;
@@ -311,6 +325,7 @@ impl DesktopApp {
     fn settings_card(&mut self, ui: &mut egui::Ui) {
         let before = toml::to_string(&self.config).unwrap_or_default();
         let running = self.engine.is_running();
+        let macos_capture = self.is_macos_capture();
         let compact = self.compact || ui.ctx().content_rect().width() < 1100.0;
         card()
             .inner_margin(if compact { 16 } else { 20 })
@@ -326,7 +341,7 @@ impl DesktopApp {
                     let current = self
                         .selected_monitor()
                         .map(|m| m.name.clone())
-                        .unwrap_or_else(|| "Windows 上可选择显示器".into());
+                        .unwrap_or_else(|| "未找到显示器".into());
                     let mut selected = self.config.monitor.clone();
                     egui::ComboBox::from_id_salt("monitor")
                         .selected_text(current)
@@ -349,11 +364,13 @@ impl DesktopApp {
                     }
                     if let Some(monitor) = self.selected_monitor() {
                         ui.add_space(4.0);
+                        let dimensions = format!("{} × {}", monitor.width, monitor.height);
                         ui.label(
-                            RichText::new(format!(
-                                "{} × {}  ·  {} Hz",
-                                monitor.width, monitor.height, monitor.refresh_hz
-                            ))
+                            RichText::new(if monitor.refresh_hz > 0 {
+                                format!("{dimensions}  ·  {} Hz", monitor.refresh_hz)
+                            } else {
+                                dimensions
+                            })
                             .size(11.5)
                             .color(MUTED),
                         );
@@ -441,13 +458,17 @@ impl DesktopApp {
                     ui.add_space(7.0);
                     ui.horizontal(|ui| {
                         if ui
-                            .add_sized(
-                                [ui.available_width(), 29.0],
-                                egui::Button::new(RichText::new("在屏幕上框选区域").size(12.0))
-                                    .fill(Color32::WHITE)
-                                    .stroke(Stroke::new(1.0, LINE))
-                                    .corner_radius(6.0),
-                            )
+                            .add_enabled_ui(cfg!(windows) || self.snapshot, |ui| {
+                                ui.add_sized(
+                                    [ui.available_width(), 29.0],
+                                    egui::Button::new(RichText::new("在屏幕上框选区域").size(12.0))
+                                        .fill(Color32::WHITE)
+                                        .stroke(Stroke::new(1.0, LINE))
+                                        .corner_radius(6.0),
+                                )
+                            })
+                            .inner
+                            .on_disabled_hover_text("请使用尺寸预设，或在下方输入屏幕像素坐标。")
                             .clicked()
                         {
                             #[cfg(windows)]
@@ -456,9 +477,7 @@ impl DesktopApp {
                             }
                             #[cfg(not(windows))]
                             {
-                                self.error = Some(
-                                    "屏幕框选仅支持 Windows；当前系统可预览和编辑界面。".into(),
-                                );
+                                self.error = Some("请使用尺寸预设或手动输入坐标。".into());
                             }
                         }
                     });
@@ -523,17 +542,23 @@ impl DesktopApp {
                                 .speed(1.0)
                                 .suffix(" fps"),
                         );
-                        ui.add_space(15.0);
-                        ui.checkbox(
-                            &mut self.config.unlimited,
-                            RichText::new("无上限").size(12.0),
-                        );
+                        if !macos_capture {
+                            ui.add_space(15.0);
+                            ui.checkbox(
+                                &mut self.config.unlimited,
+                                RichText::new("无上限").size(12.0),
+                            );
+                        }
                     });
                     ui.add_space(5.0);
                     ui.label(
-                        RichText::new("240 Hz 显示器建议从 240 fps 开始")
-                            .size(11.0)
-                            .color(MUTED),
+                        RichText::new(if macos_capture {
+                            "帧率上限，实际采集取决于屏幕更新"
+                        } else {
+                            "240 Hz 显示器建议从 240 fps 开始"
+                        })
+                        .size(11.0)
+                        .color(MUTED),
                     );
                 });
                 ui.add_space(13.0);
@@ -548,26 +573,30 @@ impl DesktopApp {
                                 .spacing([12.0, 9.0])
                                 .show(ui, |ui| {
                                     ui.label("采集方式");
-                                    egui::ComboBox::from_id_salt("backend")
-                                        .width(145.0)
-                                        .selected_text(backend_name(self.config.backend))
-                                        .show_ui(ui, |ui| {
-                                            ui.selectable_value(
-                                                &mut self.config.backend,
-                                                Backend::Auto,
-                                                "自动选择（推荐）",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.config.backend,
-                                                Backend::Dxgi,
-                                                "DXGI 高速采集",
-                                            );
-                                            ui.selectable_value(
-                                                &mut self.config.backend,
-                                                Backend::Gdi,
-                                                "GDI 兼容采集",
-                                            );
-                                        });
+                                    if macos_capture {
+                                        ui.label("ScreenCaptureKit");
+                                    } else {
+                                        egui::ComboBox::from_id_salt("backend")
+                                            .width(145.0)
+                                            .selected_text(backend_name(self.config.backend))
+                                            .show_ui(ui, |ui| {
+                                                ui.selectable_value(
+                                                    &mut self.config.backend,
+                                                    Backend::Auto,
+                                                    "自动选择（推荐）",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.config.backend,
+                                                    Backend::Dxgi,
+                                                    "DXGI 高速采集",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.config.backend,
+                                                    Backend::Gdi,
+                                                    "GDI 兼容采集",
+                                                );
+                                            });
+                                    }
                                     ui.end_row();
                                     ui.label("视频格式");
                                     egui::ComboBox::from_id_salt("pixel")
@@ -589,12 +618,16 @@ impl DesktopApp {
                                 });
                             ui.add_space(8.0);
                             ui.checkbox(&mut self.config.cursor, "包含鼠标指针");
-                            ui.checkbox(&mut self.config.precision, "精确帧间调度")
-                                .on_hover_text(
-                                    "提高调度精度，但会增加 CPU 占用。建议先使用默认设置。",
-                                );
+                            if !macos_capture {
+                                ui.checkbox(&mut self.config.precision, "精确帧间调度")
+                                    .on_hover_text(
+                                        "提高调度精度，但会增加 CPU 占用。建议先使用默认设置。",
+                                    );
+                            }
                         });
-                        ui.checkbox(&mut self.config.close_to_tray, "关闭窗口时收起到托盘");
+                        if !macos_capture {
+                            ui.checkbox(&mut self.config.close_to_tray, "关闭窗口时收起到托盘");
+                        }
                     });
             });
         if toml::to_string(&self.config).unwrap_or_default() != before {
@@ -942,7 +975,7 @@ impl DesktopApp {
                 ui.add_space(12.0);
                 ui.label(RichText::new(message).size(11.0).color(MUTED));
             }
-            if ui.available_width() > 140.0 {
+            if !self.is_macos_capture() && ui.available_width() > 140.0 {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add_enabled(
@@ -972,6 +1005,9 @@ impl DesktopApp {
             .iter()
             .find(|m| m.id == self.config.monitor)
             .or(self.monitors.first())
+    }
+    fn is_macos_capture(&self) -> bool {
+        cfg!(target_os = "macos") && !self.snapshot
     }
     fn apply_preset(&mut self, size: u32) {
         if let Some(monitor) = self.selected_monitor() {
@@ -1005,6 +1041,23 @@ impl DesktopApp {
         self.dismissed_worker_error = None;
         if let Err(error) = self.config.validate() {
             self.error = Some(error);
+            return;
+        }
+        if self.is_macos_capture() {
+            let Some(monitor) = self.selected_monitor() else {
+                self.error = Some("没有可用的显示器，请检查显示器连接后重新打开程序。".into());
+                return;
+            };
+            if !self.config.region.fits(monitor) {
+                self.error = Some("采集区域需位于所选显示器内。".into());
+                return;
+            }
+        }
+        #[cfg(target_os = "macos")]
+        if !crate::capture_macos::has_permission() && !crate::capture_macos::request_permission() {
+            self.error = Some(
+                "请在系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 FrameLink，授权后退出并重新打开程序。".into(),
+            );
             return;
         }
         if self.config.backend == Backend::Dxgi

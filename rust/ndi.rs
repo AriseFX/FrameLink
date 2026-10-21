@@ -1,4 +1,4 @@
-//! Minimal, explicit NDI x64 C ABI. The runtime is loaded lazily on the sender worker.
+//! Minimal NDI C ABI. The runtime is loaded lazily on the sender worker.
 use std::ffi::c_char;
 
 pub const BGRX: i32 = 0x5852_4742;
@@ -22,7 +22,7 @@ pub struct VideoFrame {
 }
 
 #[repr(C)]
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 struct SendSettings {
     name: *const c_char,
     groups: *const c_char,
@@ -30,13 +30,13 @@ struct SendSettings {
     clock_audio: bool,
 }
 #[repr(C)]
-#[cfg(any(windows, test))]
+#[cfg(any(windows, target_os = "macos", test))]
 struct Source {
     name: *const c_char,
     address: *const c_char,
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 mod runtime {
     use super::*;
     use libloading::Library;
@@ -55,6 +55,42 @@ mod runtime {
     type Connections = unsafe extern "C" fn(*mut c_void, u32) -> i32;
     type SourceName = unsafe extern "C" fn(*mut c_void) -> *const Source;
 
+    #[cfg(windows)]
+    fn load_library() -> Result<Library, String> {
+        let exe = std::env::current_exe().map_err(|e| format!("无法获取程序路径：{e}"))?;
+        let path = exe
+            .parent()
+            .ok_or("无法获取程序目录")?
+            .join("Processing.NDI.Lib.x64.dll");
+        // Keep the Windows runtime beside the executable, outside DLL search paths.
+        unsafe { Library::new(&path) }.map_err(|e| {
+            format!(
+                "无法加载 {}。请将NDI运行库放在EXE旁，并安装VC++ x64运行库。{e}",
+                path.display()
+            )
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    fn load_library() -> Result<Library, String> {
+        let exe = std::env::current_exe().map_err(|e| format!("无法获取程序路径：{e}"))?;
+        let override_path = std::env::var_os("FRAMELINK_NDI_RUNTIME");
+        let candidates = super::macos_runtime_paths(&exe, override_path.as_deref())?;
+        let mut failures = Vec::with_capacity(candidates.len());
+        for path in candidates {
+            // All candidates are absolute. Never search the working directory or
+            // depend on DYLD_LIBRARY_PATH when launched from Finder.
+            match unsafe { Library::new(&path) } {
+                Ok(library) => return Ok(library),
+                Err(error) => failures.push(format!("{}：{error}", path.display())),
+            }
+        }
+        Err(format!(
+            "无法加载 macOS NDI 运行库。请安装 NDI Runtime，或将 libndi.dylib 放入应用的 Contents/Frameworks；也可用 FRAMELINK_NDI_RUNTIME 指定绝对路径。\n{}",
+            failures.join("\n")
+        ))
+    }
+
     pub struct Ndi {
         // Function pointers remain valid because this library outlives every sender.
         _library: Library,
@@ -68,19 +104,7 @@ mod runtime {
     }
     impl Ndi {
         pub fn load() -> Result<Self, String> {
-            let exe = std::env::current_exe().map_err(|e| format!("无法获取程序路径：{e}"))?;
-            let path = exe
-                .parent()
-                .ok_or("无法获取程序目录")?
-                .join("Processing.NDI.Lib.x64.dll");
-            // An absolute path restricts the primary runtime to the executable's
-            // directory; the GUI itself starts without loading this runtime.
-            let library = unsafe { Library::new(&path) }.map_err(|e| {
-                format!(
-                    "无法加载 {}。请将NDI运行库放在EXE旁，并安装VC++ x64运行库。{e}",
-                    path.display()
-                )
-            })?;
+            let library = load_library()?;
             unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
                 unsafe { lib.get::<T>(name) }.map(|f| *f).map_err(|e| {
                     format!(
@@ -191,8 +215,40 @@ mod runtime {
     }
 }
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 pub use runtime::{Ndi, Sender};
+
+#[cfg(target_os = "macos")]
+fn macos_runtime_paths(
+    exe: &std::path::Path,
+    override_path: Option<&std::ffi::OsStr>,
+) -> Result<Vec<std::path::PathBuf>, String> {
+    use std::path::PathBuf;
+
+    if let Some(override_path) = override_path {
+        let path = PathBuf::from(override_path);
+        if !path.is_absolute() {
+            return Err("FRAMELINK_NDI_RUNTIME 必须是 libndi.dylib 的绝对路径".into());
+        }
+        // An explicit override should report its own failure instead of silently
+        // loading a different runtime, which would invalidate version comparisons.
+        return Ok(vec![path]);
+    }
+    let directory = exe.parent().ok_or("无法获取程序目录")?;
+    let mut paths = Vec::with_capacity(4);
+    if directory.file_name().is_some_and(|name| name == "MacOS")
+        && let Some(contents) = directory.parent()
+        && contents.file_name().is_some_and(|name| name == "Contents")
+    {
+        paths.push(contents.join("Frameworks/libndi.dylib"));
+    }
+    paths.push(directory.join("libndi.dylib"));
+    paths.push(PathBuf::from("/usr/local/lib/libndi.dylib"));
+    paths.push(PathBuf::from(
+        "/Library/NDI SDK for Apple/lib/macOS/libndi.dylib",
+    ));
+    Ok(paths)
+}
 
 #[cfg(test)]
 mod tests {
@@ -207,5 +263,56 @@ mod tests {
         assert_eq!(std::mem::offset_of!(VideoFrame, data), 40);
         assert_eq!(std::mem::offset_of!(VideoFrame, metadata), 56);
         assert_eq!(std::mem::offset_of!(VideoFrame, timestamp), 64);
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_bundle_runtime_precedes_installed_libraries() {
+        let paths = macos_runtime_paths(
+            std::path::Path::new("/Applications/FrameLink.app/Contents/MacOS/FrameLink"),
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            paths,
+            [
+                "/Applications/FrameLink.app/Contents/Frameworks/libndi.dylib",
+                "/Applications/FrameLink.app/Contents/MacOS/libndi.dylib",
+                "/usr/local/lib/libndi.dylib",
+                "/Library/NDI SDK for Apple/lib/macOS/libndi.dylib",
+            ]
+            .map(std::path::PathBuf::from)
+        );
+        assert!(paths.iter().all(|path| path.is_absolute()));
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_explicit_runtime_never_falls_back() {
+        let exe = std::path::Path::new("/tmp/FrameLink");
+        let override_path = std::ffi::OsStr::new("/opt/ndi/libndi.dylib");
+        assert_eq!(
+            macos_runtime_paths(exe, Some(override_path)).unwrap(),
+            [std::path::PathBuf::from(override_path)]
+        );
+        assert!(macos_runtime_paths(exe, Some(std::ffi::OsStr::new("libndi.dylib"))).is_err());
+        assert!(macos_runtime_paths(exe, Some(std::ffi::OsStr::new(""))).is_err());
+    }
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn macos_cli_runtime_stays_beside_the_executable() {
+        let paths =
+            macos_runtime_paths(std::path::Path::new("/work/target/release/FrameLink"), None)
+                .unwrap();
+        assert_eq!(
+            paths.first().unwrap(),
+            &std::path::PathBuf::from("/work/target/release/libndi.dylib")
+        );
+        assert!(
+            !paths
+                .iter()
+                .any(|path| path.starts_with("/work/target/Frameworks"))
+        );
     }
 }

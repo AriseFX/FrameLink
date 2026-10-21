@@ -27,6 +27,19 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args
+        .first()
+        .is_some_and(|value| value == "--benchmark-pixels")
+    {
+        if args.len() > 2 {
+            return Err("用法：FrameLink --benchmark-pixels [每项秒数，默认2]".into());
+        }
+        let seconds = args
+            .get(1)
+            .map_or(Ok(2.0), |value| value.parse::<f64>())
+            .map_err(|_| "基准运行时间需为数字")?;
+        return framelink::benchmark::pixels(seconds);
+    }
     if args.first().is_some_and(|v| v == "--ui-snapshot") {
         let folder = std::path::PathBuf::from(args.get(1).map(String::as_str).unwrap_or("docs/ui"));
         snapshot::write(&folder.join("desktop-1200.png"), 1200, 820)?;

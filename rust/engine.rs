@@ -52,18 +52,17 @@ impl Engine {
         if self.worker.is_some() || self.is_running() {
             return Err("上一发送会话仍在结束，请稍候".into());
         }
-        #[cfg(not(windows))]
+        #[cfg(not(any(windows, target_os = "macos")))]
         {
             let _ = config;
-            let error =
-                "屏幕采集和NDI发送仅支持Windows x64；当前平台可查看桌面界面和编辑配置".to_string();
+            let error = "屏幕采集和NDI发送需要Windows x64或macOS".to_string();
             self.shared.stats(|s| {
                 s.phase = Phase::Error;
                 s.error = Some(error.clone());
             });
             Err(error)
         }
-        #[cfg(windows)]
+        #[cfg(any(windows, target_os = "macos"))]
         {
             self.shared.stop.store(false, Ordering::Release);
             self.shared
@@ -86,7 +85,14 @@ impl Engine {
                 .name("ndi-latest-frame".into())
                 .spawn(move || {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        windows_worker::run(&shared, &config)
+                        #[cfg(windows)]
+                        {
+                            windows_worker::run(&shared, &config)
+                        }
+                        #[cfg(target_os = "macos")]
+                        {
+                            macos_worker::run(&shared, &config)
+                        }
                     }));
                     let error = match result {
                         Ok(Ok(())) => None,
@@ -189,13 +195,21 @@ impl Drop for Engine {
     }
 }
 
+#[cfg(target_os = "macos")]
+mod macos_worker;
+#[cfg(any(windows, target_os = "macos"))]
+mod send_pipeline;
+
 #[cfg(windows)]
 mod windows_worker {
-    use super::*;
+    use super::{
+        send_pipeline::{Measurements, Stream},
+        *,
+    };
     use crate::{
         capture::{Capture, CaptureError, monitors},
-        model::{Backend, PixelFormat},
-        ndi::{BGRX, NV12, Ndi, Sender, VideoFrame},
+        model::Backend,
+        ndi::Ndi,
         pixels::{FrameBuffers, preview_bgra},
         policy::{
             CaptureRetry, LatestFrameSlots, next_frame_deadline, region_in_desktop, timer_delay,
@@ -206,12 +220,9 @@ mod windows_worker {
         Win32::{
             Foundation::{CloseHandle, HANDLE, WAIT_FAILED},
             Media::{timeBeginPeriod, timeEndPeriod},
-            System::{
-                SystemInformation::GetSystemTimePreciseAsFileTime,
-                Threading::{
-                    CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, CreateWaitableTimerExW,
-                    SetWaitableTimer, TIMER_ALL_ACCESS, WaitForSingleObject,
-                },
+            System::Threading::{
+                CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, CreateWaitableTimerExW, SetWaitableTimer,
+                TIMER_ALL_ACCESS, WaitForSingleObject,
             },
         },
         core::PCWSTR,
@@ -359,67 +370,6 @@ mod windows_worker {
         }
     }
 
-    /// Field drop order is part of the ownership contract: the sender flushes and
-    /// is destroyed before either pixel storage or descriptors can be released.
-    struct Stream<'a> {
-        sender: Sender<'a>,
-        buffers: FrameBuffers,
-        descriptors: Box<[VideoFrame; 2]>,
-        descriptor: usize,
-    }
-    impl<'a> Stream<'a> {
-        fn new(sender: Sender<'a>, buffers: FrameBuffers, config: &Config) -> Self {
-            let frame = VideoFrame {
-                width: config.region.width as i32,
-                height: config.region.height as i32,
-                fourcc: if config.pixel == PixelFormat::Nv12 {
-                    NV12
-                } else {
-                    BGRX
-                },
-                rate_n: config.fps as i32,
-                rate_d: 1,
-                aspect: config.region.width as f32 / config.region.height as f32,
-                format: 1,
-                timecode: i64::MAX,
-                data: std::ptr::null(),
-                stride: config.region.width as i32
-                    * if config.pixel == PixelFormat::Nv12 {
-                        1
-                    } else {
-                        4
-                    },
-                metadata: std::ptr::null(),
-                timestamp: 0,
-            };
-            Self {
-                sender,
-                buffers,
-                descriptors: Box::new([frame; 2]),
-                descriptor: 0,
-            }
-        }
-        fn submit(&mut self, slot: usize, rate: u32) {
-            self.descriptor ^= 1;
-            let frame = &mut self.descriptors[self.descriptor];
-            frame.data = self.buffers.data(slot);
-            frame.rate_n = rate as i32;
-            let time = unsafe { GetSystemTimePreciseAsFileTime() };
-            let ticks = (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
-            frame.timecode = ticks.saturating_sub(116_444_736_000_000_000) as i64;
-            // The descriptor alternates even for repeated pixels, so its
-            // timecode is never changed while NDI can still be reading it.
-            unsafe { self.sender.submit(frame) };
-        }
-    }
-
-    #[derive(Default)]
-    struct Measurements {
-        capture: f64,
-        conversion: f64,
-        submit: f64,
-        count: u64,
-    }
     fn validate_desktop_region(config: &Config) -> Result<(), String> {
         // Enumeration can temporarily fail on desktop/session transitions.
         // A real nonempty display layout provides enough evidence to stop an
@@ -632,8 +582,8 @@ mod tests {
         assert!(!engine.is_running());
     }
     #[test]
-    #[cfg(not(windows))]
-    fn non_windows_cannot_claim_to_send_a_stream() {
+    #[cfg(not(any(windows, target_os = "macos")))]
+    fn unsupported_platform_cannot_claim_to_send_a_stream() {
         let mut engine = Engine::new();
         assert!(
             engine

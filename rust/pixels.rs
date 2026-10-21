@@ -1,6 +1,6 @@
 use crate::model::{PixelFormat, Preview};
 
-#[cfg(windows)]
+#[cfg(any(windows, target_os = "macos"))]
 unsafe extern "C" {
     fn ARGBToNV12Matrix(
         src: *const u8,
@@ -107,7 +107,7 @@ impl FrameBuffers {
                 Ok(())
             }
             PixelFormat::Nv12 => {
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "macos"))]
                 {
                     // DXGI and GDI expose BGRA byte order. libyuv's ARGB name
                     // describes little-endian words, so ARGBToNV12 is correct.
@@ -136,9 +136,9 @@ impl FrameBuffers {
                         Err("libyuv NV12转换失败".into())
                     }
                 }
-                #[cfg(not(windows))]
+                #[cfg(not(any(windows, target_os = "macos")))]
                 {
-                    Err("NV12转换仅在Windows发送版本中可用".into())
+                    Err("当前平台不支持NV12转换".into())
                 }
             }
         }
@@ -212,6 +212,47 @@ mod tests {
         );
         assert_eq!(pointers, [buffers.data(0), buffers.data(1)]);
         assert!(buffers.convert(1, &input[..10], 12).is_err());
+    }
+
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn nv12_black_white_and_padded_rows_match_with_stable_buffers() {
+        // The production crop sizes exercise SIMD rows and both NDI matrices.
+        // Neutral black/white have the same limited-range reference values in
+        // BT.601 and BT.709: Y=16/235, U=128, V=128.
+        for size in [512u32, 640] {
+            let width = size as usize;
+            let row = width * 4;
+            let stride = row + 28;
+            let mut tight = vec![0u8; row * width];
+            let mut padded = vec![0xa5; stride * width];
+            for y in 0..width {
+                for x in 0..width {
+                    let value = if x < width / 2 { 0 } else { 255 };
+                    let pixel = [value, value, value, 255];
+                    tight[y * row + x * 4..y * row + x * 4 + 4].copy_from_slice(&pixel);
+                    padded[y * stride + x * 4..y * stride + x * 4 + 4].copy_from_slice(&pixel);
+                }
+            }
+            let mut buffers = FrameBuffers::new(size, size, PixelFormat::Nv12).unwrap();
+            let addresses = [buffers.data(0), buffers.data(1)];
+            buffers.convert(0, &tight, row).unwrap();
+            buffers.convert(1, &padded, stride).unwrap();
+            assert_eq!(buffers.pixels[0], buffers.pixels[1]);
+            let (luma, chroma) = buffers.pixels[0].split_at(width * width);
+            for line in luma.chunks_exact(width) {
+                assert!(line[..width / 2].iter().all(|&value| value == 16));
+                assert!(line[width / 2..].iter().all(|&value| value == 235));
+            }
+            assert!(chroma.iter().all(|&value| value == 128));
+
+            // Converting one slot must leave the previous async-send slot intact.
+            let previous = buffers.pixels[0].clone();
+            padded.fill(0);
+            buffers.convert(1, &padded, stride).unwrap();
+            assert_eq!(buffers.pixels[0], previous);
+            assert_eq!(addresses, [buffers.data(0), buffers.data(1)]);
+        }
     }
     #[test]
     fn preview_uses_rgb_channels_and_ignores_uninitialized_alpha() {
