@@ -1,0 +1,3 @@
+# Preserve distributed notices and static evidence without newline rewriting.
+/Processing.NDI.Lib.Licenses.txt -text -whitespace
+/docs/evidence/** -text -whitespace

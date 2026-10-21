@@ -1,0 +1,31 @@
+
+/tmp/screencast-reference-2.4.3/ScreenCastSendCpp.exe:     file format pei-x86-64
+
+
+Disassembly of section .text:
+
+000000014000dce0 <.text+0xcce0>:
+   14000dce0:	00 0f                	add    %cl,(%rdi)
+   14000dce2:	b6 87                	mov    $0x87,%dh
+   14000dce4:	8e 05 00 00 c6 45    	mov    0x45c60000(%rip),%es        # 0x185c6dcea
+   14000dcea:	e8 02 48 8d 5d       	call   0x19d8e24f1
+   14000dcef:	ea                   	(bad)
+   14000dcf0:	83 c8 30             	or     $0x30,%eax
+   14000dcf3:	66 89 45 ea          	mov    %ax,-0x16(%rbp)
+   14000dcf7:	66 c7 45 ec 00 00    	movw   $0x0,-0x14(%rbp)
+   14000dcfd:	f6 45 d0 01          	testb  $0x1,-0x30(%rbp)
+   14000dd01:	49 89 f1             	mov    %rsi,%r9
+   14000dd04:	74 04                	je     0x14000dd0a
+   14000dd06:	4c 8b 4d e0          	mov    -0x20(%rbp),%r9
+   14000dd0a:	48 8d 0d 8d 9b 12 00 	lea    0x129b8d(%rip),%rcx        # 0x14013789e
+   14000dd11:	48 8d 15 54 9b 12 00 	lea    0x129b54(%rip),%rdx        # 0x14013786c
+   14000dd18:	49 89 d8             	mov    %rbx,%r8
+   14000dd1b:	ff 15 8f 19 14 00    	call   *0x14198f(%rip)        # 0x14014f6b0
+   14000dd21:	85 c0                	test   %eax,%eax
+   14000dd23:	0f 84 55 04 00 00    	je     0x14000e17e
+   14000dd29:	f6 45 e8 01          	testb  $0x1,-0x18(%rbp)
+   14000dd2d:	74 09                	je     0x14000dd38
+   14000dd2f:	48 8b 4d f8          	mov    -0x8(%rbp),%rcx
+   14000dd33:	e8 28 a2 08 00       	call   0x140097f60
+   14000dd38:	48 8b 87 10 01 00 00 	mov    0x110(%rdi),%rax
+   14000dd3f:	48                   	rex.W
