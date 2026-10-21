@@ -208,6 +208,7 @@ mod windows_worker {
     };
     use crate::{
         capture::{Capture, CaptureError, monitors},
+        diagnostics::FrameTiming,
         model::Backend,
         ndi::Ndi,
         pixels::{FrameBuffers, preview_bgra},
@@ -408,6 +409,8 @@ mod windows_worker {
         let (mut frames, mut repeats, mut window_frames, mut window_updates) =
             (0u64, 0u64, 0u64, 0u64);
         let mut measurements = Measurements::default();
+        // Optional scalar timings only; no captured video is queued here.
+        let mut timings = Vec::with_capacity(if config.diagnostics { 2048 } else { 0 });
         while !shared.stop.load(Ordering::Acquire) {
             if !config.unlimited && !pacer.until(next, &shared.stop)? {
                 break;
@@ -464,8 +467,17 @@ mod windows_worker {
                     })?;
                     result.map_err(CaptureError::Fatal)?;
                 }
+                let desktop_age_before_submit_ms = config
+                    .diagnostics
+                    .then(|| current.source_age_ms())
+                    .flatten();
+                let submit_started = config.diagnostics.then(Instant::now);
                 stream.submit(plan.slot, current.nominal_fps());
                 let submitted = Instant::now();
+                let desktop_age_after_submit_ms = config
+                    .diagnostics
+                    .then(|| current.source_age_ms())
+                    .flatten();
                 slots.submitted(plan.slot);
                 frames += 1;
                 window_frames += 1;
@@ -478,6 +490,24 @@ mod windows_worker {
                 measurements.conversion += (converted - captured).as_secs_f64() * 1000.0;
                 measurements.submit += (submitted - converted).as_secs_f64() * 1000.0;
                 measurements.count += 1;
+                if let Some(submit_started) = submit_started
+                    && timings.len() < timings.capacity()
+                {
+                    let capture = current.diagnostics();
+                    timings.push(FrameTiming {
+                        frame: frames,
+                        refreshed: plan.refresh,
+                        desktop_updated: capture.desktop_updated,
+                        release_ms: capture.release_ms,
+                        acquire_ms: capture.acquire_ms,
+                        map_wait_ms: capture.map_wait_ms,
+                        conversion_ms: (converted - captured).as_secs_f64() * 1000.0,
+                        ndi_submit_ms: (submitted - submit_started).as_secs_f64() * 1000.0,
+                        desktop_age_before_submit_ms,
+                        desktop_age_after_submit_ms,
+                        accumulated_desktop_frames: capture.accumulated_frames,
+                    });
+                }
                 // Preview has its own two-fps path after submission, so it can
                 // neither keep an old send buffer alive nor delay that frame's submit.
                 if shared.preview_enabled.load(Ordering::Relaxed)
@@ -532,7 +562,11 @@ mod windows_worker {
                     s.conversion_ms = measurements.conversion / n;
                     s.submit_ms = measurements.submit / n;
                     s.uptime_sec = now.duration_since(started).as_secs_f64();
+                    if config.diagnostics {
+                        s.timings.clone_from(&timings);
+                    }
                 });
+                timings.clear();
                 window_frames = 0;
                 window_updates = 0;
                 measurements = Measurements::default();
@@ -547,6 +581,9 @@ mod windows_worker {
             s.frames = frames;
             s.repeats = repeats;
             s.uptime_sec = started.elapsed().as_secs_f64();
+            if config.diagnostics && !timings.is_empty() {
+                s.timings.clone_from(&timings);
+            }
         });
         // Stream's sender is its first field: draining and destroy complete
         // before stable pixel buffers/descriptors are dropped, including unwind.

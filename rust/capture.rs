@@ -1,6 +1,9 @@
 //! Windows desktop acquisition. All GPU and GDI state stays on the capture thread.
 //! The hot DXGI path maps only the requested crop and exposes it until the callback returns.
-use crate::model::{Config, Monitor, Region};
+use crate::{
+    capture_lease::{FrameLease, ReleaseFrame},
+    model::{Config, Monitor, Region},
+};
 use std::{
     ffi::c_void,
     fmt,
@@ -17,7 +20,10 @@ use windows::{
             Dxgi::{Common::*, *},
             Gdi::*,
         },
-        System::LibraryLoader::GetModuleHandleW,
+        System::{
+            LibraryLoader::GetModuleHandleW,
+            Performance::{QueryPerformanceCounter, QueryPerformanceFrequency},
+        },
         UI::{HiDpi::*, WindowsAndMessaging::*},
     },
     core::{BOOL, Interface, PCWSTR},
@@ -37,6 +43,18 @@ impl fmt::Display for CaptureError {
     }
 }
 impl std::error::Error for CaptureError {}
+
+/// Per-acquisition timings and desktop metadata. These are not network latency.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CaptureDiagnostics {
+    pub release_ms: f64,
+    pub acquire_ms: f64,
+    pub map_wait_ms: f64,
+    pub accumulated_frames: u32,
+    pub desktop_updated: bool,
+    pub last_present_qpc: Option<i64>,
+}
+
 fn error(operation: &str, value: windows::core::Error) -> CaptureError {
     let code = value.code().0 as u32;
     let message = format!("{operation}失败 (0x{code:08X})：{value}");
@@ -328,6 +346,7 @@ impl Drop for Dib {
 }
 
 struct DxgiCapture {
+    held_frame: Option<FrameLease<DxgiFrame>>,
     context: ID3D11DeviceContext,
     staging: ID3D11Texture2D,
     duplication: IDXGIOutputDuplication,
@@ -340,13 +359,17 @@ struct DxgiCapture {
     cursor_buffer: Option<Dib>,
     unlimited: bool,
     last_yield: Instant,
+    diagnostics: CaptureDiagnostics,
+    diagnostics_enabled: bool,
+    qpc_frequency: Option<i64>,
 }
-struct FrameGuard<'a>(&'a IDXGIOutputDuplication);
-impl Drop for FrameGuard<'_> {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = self.0.ReleaseFrame();
-        }
+
+struct DxgiFrame(IDXGIOutputDuplication);
+impl ReleaseFrame for DxgiFrame {
+    type Error = CaptureError;
+
+    fn release(self) -> Result<(), Self::Error> {
+        unsafe { self.0.ReleaseFrame() }.map_err(|e| error("释放桌面帧", e))
     }
 }
 struct MapGuard<'a> {
@@ -461,6 +484,7 @@ impl DxgiCapture {
                         config.fps
                     };
                     return Ok(Self {
+                        held_frame: None,
                         context,
                         staging,
                         duplication,
@@ -477,6 +501,17 @@ impl DxgiCapture {
                         },
                         unlimited: config.unlimited,
                         last_yield: Instant::now(),
+                        diagnostics: CaptureDiagnostics::default(),
+                        diagnostics_enabled: config.diagnostics,
+                        qpc_frequency: if config.diagnostics {
+                            let mut frequency = 0;
+                            QueryPerformanceFrequency(&mut frequency)
+                                .ok()
+                                .filter(|_| frequency > 0)
+                                .map(|_| frequency)
+                        } else {
+                            None
+                        },
                     });
                 }
             }
@@ -486,15 +521,34 @@ impl DxgiCapture {
         ))
     }
     fn acquire(&mut self, timeout_ms: u32) -> Result<Option<bool>, CaptureError> {
+        self.diagnostics = CaptureDiagnostics {
+            last_present_qpc: self.diagnostics.last_present_qpc,
+            ..CaptureDiagnostics::default()
+        };
+        // DXGI avoids copying intermediate desktop updates while we own the
+        // surface. Release it only when ready to acquire the latest update.
+        if let Some(frame) = self.held_frame.take() {
+            let started = self.diagnostics_enabled.then(Instant::now);
+            let result = frame.release();
+            if let Some(started) = started {
+                self.diagnostics.release_ms = started.elapsed().as_secs_f64() * 1000.0;
+            }
+            result?;
+        }
         let mut info = DXGI_OUTDUPL_FRAME_INFO::default();
         let mut resource = None;
         let mut changed = false;
-        match unsafe {
+        let acquire_started = self.diagnostics_enabled.then(Instant::now);
+        let acquired = unsafe {
             self.duplication
                 .AcquireNextFrame(timeout_ms, &mut info, &mut resource)
-        } {
+        };
+        if let Some(started) = acquire_started {
+            self.diagnostics.acquire_ms = started.elapsed().as_secs_f64() * 1000.0;
+        }
+        match acquired {
             Ok(()) => {
-                let frame = FrameGuard(&self.duplication);
+                let frame = FrameLease::new(DxgiFrame(self.duplication.clone()));
                 if info.LastMouseUpdateTime != 0 {
                     self.separate_cursor = info.PointerPosition.Visible.as_bool();
                     changed = self.cursor;
@@ -532,9 +586,14 @@ impl DxgiCapture {
                     self.has_image = true;
                     changed = true;
                 }
-                // Return ReleaseFrame errors explicitly, with the guard only for early exits/panics.
-                std::mem::forget(frame);
-                unsafe { self.duplication.ReleaseFrame() }.map_err(|e| error("释放桌面帧", e))?;
+                self.diagnostics.accumulated_frames = info.AccumulatedFrames;
+                self.diagnostics.desktop_updated = info.LastPresentTime != 0;
+                if info.LastPresentTime > 0 {
+                    self.diagnostics.last_present_qpc = Some(info.LastPresentTime);
+                }
+                // Early errors release the local lease; successful acquisition
+                // keeps it alive through readback, submission and frame pacing.
+                self.held_frame = Some(frame);
             }
             Err(e) if e.code() == DXGI_ERROR_WAIT_TIMEOUT => {}
             Err(e) => return Err(error("获取桌面帧", e)),
@@ -556,11 +615,15 @@ impl DxgiCapture {
             return Err(CaptureError::Fatal("尚无可读取的桌面帧".into()));
         }
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
-        unsafe {
+        let map_started = self.diagnostics_enabled.then(Instant::now);
+        let result = unsafe {
             self.context
                 .Map(&self.staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+        };
+        if let Some(started) = map_started {
+            self.diagnostics.map_wait_ms += started.elapsed().as_secs_f64() * 1000.0;
         }
-        .map_err(|e| error("映射桌面区域", e))?;
+        result.map_err(|e| error("映射桌面区域", e))?;
         let guard = MapGuard {
             context: &self.context,
             texture: &self.staging,
@@ -601,6 +664,8 @@ enum CaptureInner {
         nominal: u32,
         buffer: Dib,
         has_image: bool,
+        diagnostics: CaptureDiagnostics,
+        diagnostics_enabled: bool,
     },
 }
 impl Capture {
@@ -634,6 +699,8 @@ impl Capture {
                 nominal: config.fps,
                 buffer: Dib::new(config.region.width, config.region.height)?,
                 has_image: false,
+                diagnostics: CaptureDiagnostics::default(),
+                diagnostics_enabled: config.diagnostics,
             },
         })
     }
@@ -645,10 +712,18 @@ impl Capture {
                 cursor,
                 buffer,
                 has_image,
+                diagnostics,
+                diagnostics_enabled,
                 ..
             } => {
+                *diagnostics = CaptureDiagnostics::default();
+                let started = diagnostics_enabled.then(Instant::now);
                 let _dpi = DpiGuard::physical();
-                buffer.capture(*region, *cursor)?;
+                let result = buffer.capture(*region, *cursor);
+                if let Some(started) = started {
+                    diagnostics.acquire_ms = started.elapsed().as_secs_f64() * 1000.0;
+                }
+                result?;
                 *has_image = true;
                 Ok(Some(true))
             }
@@ -678,6 +753,25 @@ impl Capture {
     }
     pub fn is_dxgi(&self) -> bool {
         matches!(self.inner, CaptureInner::Dxgi(_))
+    }
+    pub fn diagnostics(&self) -> CaptureDiagnostics {
+        match &self.inner {
+            CaptureInner::Dxgi(capture) => capture.diagnostics,
+            CaptureInner::Gdi { diagnostics, .. } => *diagnostics,
+        }
+    }
+    /// Age of the most recently captured desktop update at this observation.
+    /// Both timestamps use QPC; NDI timecode and wall-clock time are unrelated.
+    pub fn source_age_ms(&self) -> Option<f64> {
+        let CaptureInner::Dxgi(capture) = &self.inner else {
+            return None;
+        };
+        let presented = capture.diagnostics.last_present_qpc?;
+        let frequency = capture.qpc_frequency?;
+        let mut now = 0;
+        unsafe { QueryPerformanceCounter(&mut now) }.ok()?;
+        let age = now.checked_sub(presented)?;
+        (age >= 0).then(|| age as f64 * 1000.0 / frequency as f64)
     }
 }
 

@@ -68,6 +68,8 @@ pub struct Config {
     pub precision: bool,
     pub preview: bool,
     pub close_to_tray: bool,
+    #[serde(skip)]
+    pub diagnostics: bool,
 }
 impl Default for Config {
     fn default() -> Self {
@@ -89,6 +91,7 @@ impl Default for Config {
             precision: false,
             preview: false,
             close_to_tray: true,
+            diagnostics: false,
         }
     }
 }
@@ -136,7 +139,7 @@ impl Config {
         Ok(())
     }
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize)]
 pub enum Phase {
     #[default]
     Idle,
@@ -162,6 +165,7 @@ pub struct Stats {
     pub uptime_sec: f64,
     pub error: Option<String>,
     pub ndi_version: String,
+    pub timings: Vec<crate::diagnostics::FrameTiming>,
 }
 #[derive(Clone, Debug)]
 pub struct Preview {

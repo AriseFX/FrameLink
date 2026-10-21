@@ -27,6 +27,20 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|value| value == "--measure-send") {
+        if args.len() != 3 {
+            return Err("用法：FrameLink --measure-send <秒数1–60> <报告.json>".into());
+        }
+        #[cfg(windows)]
+        {
+            let _instance = framelink::single_instance::PrimaryInstance::acquire()?
+                .ok_or("请先退出已运行的 FrameLink，再开始发送诊断")?;
+            let seconds = args[1].parse::<f64>().map_err(|_| "诊断运行时间需为数字")?;
+            return framelink::diagnostics::measure_send(seconds, std::path::Path::new(&args[2]));
+        }
+        #[cfg(not(windows))]
+        return Err("发送诊断需要在 Windows 发送端运行".into());
+    }
     if args.first().is_some_and(|value| value == "--check-ndi") {
         if args.len() != 1 {
             return Err("用法：FrameLink --check-ndi".into());
