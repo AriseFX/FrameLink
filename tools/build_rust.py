@@ -30,14 +30,20 @@ def main():
     metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version", "1"], cwd=root, text=True))
     version = next(p["version"] for p in metadata["packages"] if p["name"] == "framelink" and not p.get("source"))
     package = root / f"dist/FrameLink-{version}-Windows-x64"
-    package.mkdir(parents=True, exist_ok=True)
-    for source, name in ((executable, "FrameLink.exe"),
-                         (root / "Processing.NDI.Lib.x64.dll", "Processing.NDI.Lib.x64.dll"),
-                         (root / "NDI License Agreement.pdf", "NDI License Agreement.pdf"),
-                         (root / "Processing.NDI.Lib.Licenses.txt", "Processing.NDI.Lib.Licenses.txt"),
-                         (root / "README.md", "README.md"),
-                         (root / "docs/Rust迁移说明.md", "docs/Rust迁移说明.md"),
-                         (root / "tests/SingleInstanceVerification.ps1", "tests/SingleInstanceVerification.ps1")):
+    package_files = ((executable, "FrameLink.exe"),
+                     (root / "Processing.NDI.Lib.x64.dll", "Processing.NDI.Lib.x64.dll"),
+                     (root / "NDI License Agreement.pdf", "NDI License Agreement.pdf"),
+                     (root / "Processing.NDI.Lib.Licenses.txt", "Processing.NDI.Lib.Licenses.txt"),
+                     (root / "README.md", "README.md"),
+                     (root / "docs/开发说明.md", "docs/开发说明.md"),
+                     (root / "tests/SingleInstanceVerification.ps1", "tests/SingleInstanceVerification.ps1"))
+    for source, _ in package_files:
+        if not source.is_file():
+            parser.error(f"Missing package input: {source}")
+    if package.exists():
+        shutil.rmtree(package)
+    package.mkdir(parents=True)
+    for source, name in package_files:
         (package / name).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, package / name)
     if (root / "docs/ui").exists():
@@ -78,10 +84,10 @@ def main():
 首次启动优先导入上一版 Rust 设置，兼容旧 C++ INI，原文件保留。
 新设置保存到 %LOCALAPPDATA%\\FrameLink\\settings.toml。
 
-本轮通过编译和本机测试，实际界面截图见docs/ui。
-尚未在 Windows 上实际运行 DXGI / NDI；240fps稳态、模式切换恢复和双机传输延迟需实机验收。
-单实例 Windows 验收脚本见 tests/SingleInstanceVerification.ps1，本环境尚未运行。
-请查看 docs/Rust迁移说明.md 中的验证边界和验收步骤。
+已通过 Windows GNU 交叉编译和本机测试；界面截图见 docs/ui。
+Windows 实机运行、240fps稳态和双机延迟尚未验收。
+单实例验收脚本：tests/SingleInstanceVerification.ps1（尚未实机运行）。
+开发与验收说明：docs/开发说明.md。
 """, encoding="utf-8")
     archive = package.parent / f"{package.name}.zip"
     temporary_archive=archive.with_suffix(".zip.tmp")

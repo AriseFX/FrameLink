@@ -934,40 +934,14 @@ impl DesktopApp {
                     self.start();
                 }
             }
-            ui.add_space(12.0);
-            ui.vertical(|ui| {
-                let subtitle = if self.snapshot {
-                    "Windows 原生桌面 · 界面预览".into()
-                } else if cfg!(not(windows)) {
-                    "采集和 NDI 发送需要 Windows".into()
-                } else if running {
-                    format!("{}  ·  {}", self.stats.backend, self.config.name)
-                } else {
-                    format!(
-                        "{} × {}  ·  {}",
-                        self.config.region.width,
-                        self.config.region.height,
-                        if self.config.unlimited {
-                            "无上限".into()
-                        } else {
-                            format!("{} fps", self.config.fps)
-                        }
-                    )
-                };
-                ui.label(RichText::new(subtitle).size(12.0).color(INK));
-                ui.add_space(2.0);
-                let tip = self
-                    .notice
-                    .as_ref()
-                    .filter(|(_, at)| at.elapsed() < Duration::from_secs(3))
-                    .map(|(message, _)| message.as_str())
-                    .unwrap_or(if running {
-                        "采集参数在停止后可调整"
-                    } else {
-                        "局域网内的 NDI 接收端可直接发现"
-                    });
-                ui.label(RichText::new(tip).size(10.5).color(MUTED));
-            });
+            if let Some((message, _)) = self
+                .notice
+                .as_ref()
+                .filter(|(_, at)| at.elapsed() < Duration::from_secs(3))
+            {
+                ui.add_space(12.0);
+                ui.label(RichText::new(message).size(11.0).color(MUTED));
+            }
             if ui.available_width() > 140.0 {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
