@@ -13,6 +13,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from fetch_ndi_macos import ensure_runtime
 
 
 TARGETS = {
@@ -123,7 +124,9 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--target", choices=TARGETS, default=default_target)
     parser.add_argument("--skip-build", action="store_true", help="Package an existing release build for the selected target")
-    parser.add_argument("--ndi-runtime", type=Path, help="Absolute path to a redistributable libndi.dylib (optional)")
+    ndi_options = parser.add_mutually_exclusive_group()
+    ndi_options.add_argument("--ndi-runtime", type=Path, help="Use this redistributable libndi.dylib instead of the pinned official runtime")
+    ndi_options.add_argument("--without-ndi", action="store_true", help="Build a UI-only package without the NDI runtime")
     args = parser.parse_args()
     if platform.system() != "Darwin":
         parser.error("macOS packaging requires macOS and the Xcode command-line tools")
@@ -131,7 +134,7 @@ def main():
         if shutil.which(command) is None:
             parser.error(f"Required tool is unavailable: {command}")
     architecture, label = TARGETS[args.target]
-    runtime = args.ndi_runtime
+    runtime = None if args.without_ndi else (args.ndi_runtime or ensure_runtime(root))
     if runtime is not None:
         if not runtime.is_absolute() or not runtime.is_file():
             parser.error("--ndi-runtime must name an existing dylib by its absolute path")
@@ -151,6 +154,7 @@ def main():
         root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml",
         *[path for path in (root / "resources").rglob("*") if path.is_file()],
         Path(__file__).resolve(),
+        root / "tools/fetch_ndi_macos.py",
     })
     if args.skip_build:
         newer = [path.relative_to(root).as_posix() for path in source_files
@@ -181,6 +185,10 @@ def main():
         shutil.copy2(executable, bundled_executable)
         bundled_executable.chmod(0o755)
         make_icon(root / "resources/app.ico", resources / "app.icns", work)
+        notices = resources / "Licenses"
+        notices.mkdir()
+        for name in ("NDI License Agreement.pdf", "Processing.NDI.Lib.Licenses.txt"):
+            shutil.copy2(root / name, notices / name)
         info = {
             "CFBundleIdentifier": "com.framelink.app",
             "CFBundleName": "FrameLink",
@@ -204,7 +212,12 @@ def main():
             frameworks.mkdir()
             bundled_runtime = frameworks / "libndi.dylib"
             shutil.copy2(runtime, bundled_runtime)
-            run("codesign", "--force", "--sign", "-", "--timestamp=none", str(bundled_runtime))
+            # Keep a valid vendor signature. Only unsigned custom runtimes need
+            # an ad-hoc signature before sealing the containing application.
+            signed = subprocess.run(["codesign", "--verify", "--strict", str(bundled_runtime)],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if signed.returncode:
+                run("codesign", "--force", "--sign", "-", "--timestamp=none", str(bundled_runtime))
         run("codesign", "--force", "--sign", "-", "--timestamp=none", str(app))
         run("codesign", "--verify", "--deep", "--strict", str(app))
         copy_notices(root, staging, metadata)
@@ -236,10 +249,10 @@ def main():
             json.dumps(build_info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
         )
         runtime_note = (
-            "包内已包含指定的 NDI 运行库。"
+            "包内已内置 NDI 运行库，无需另行安装。"
             if runtime is not None else
             "包内未包含 NDI 运行库。发送视频前，需安装对应架构的 NDI Runtime，\n"
-            "或构建时通过 --ndi-runtime 指定可分发的 libndi.dylib。"
+            "或去掉 --without-ndi 重新构建完整包。"
         )
         (staging / "使用说明.txt").write_text(
             f"FrameLink 帧连 {version}\n\n"

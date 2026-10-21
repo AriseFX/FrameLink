@@ -27,6 +27,30 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.first().is_some_and(|value| value == "--check-ndi") {
+        if args.len() != 1 {
+            return Err("用法：FrameLink --check-ndi".into());
+        }
+        #[cfg(any(windows, target_os = "macos"))]
+        {
+            let ndi = framelink::ndi::Ndi::load()?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "runtime_path": ndi.runtime_path(),
+                    "runtime_version": ndi.version(),
+                    "initialized": true,
+                    "scope": "runtime_initialization_only",
+                    "screen_capture": false,
+                    "video_sent": false,
+                }))
+                .map_err(|error| error.to_string())?
+            );
+            return Ok(());
+        }
+        #[cfg(not(any(windows, target_os = "macos")))]
+        return Err("当前平台不支持NDI运行库检查".into());
+    }
     if args
         .first()
         .is_some_and(|value| value == "--benchmark-pixels")

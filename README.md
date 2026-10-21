@@ -10,7 +10,7 @@
 
 Windows：解压构建包，启动 `FrameLink.exe`，保留同目录的 `Processing.NDI.Lib.x64.dll`。NDI DLL 可能需要 Microsoft Visual C++ 2015–2022 x64 运行库。
 
-macOS：解压对应架构的构建包，打开 `FrameLink.app`。发送需要 macOS 版 `libndi.dylib`，Windows DLL 无法使用。可通过下方脚本将合法获取的运行库放入应用包，或使用安装在 `/usr/local/lib/libndi.dylib` 的运行库。首次点击发送时申请屏幕录制权限；授权后退出并重新打开程序。当前 Mac 测试包不含 NDI 运行库。
+macOS：解压对应架构的构建包，打开 `FrameLink.app`。完整包内置 macOS NDI 6.3.2 运行库，无需另装 NDI。首次点击发送时申请屏幕录制权限；授权后退出并重新打开程序。
 
 1. 选择显示器和采集区域，填写 NDI 源名称。
 2. 点击“开始发送”。首次默认中心 512×512、240 fps、NV12、自动采集，关闭鼠标和预览。
@@ -36,7 +36,9 @@ macOS 安装 Xcode Command Line Tools（包含 Swift 和 macOS SDK）后运行�
 python3 tools/build_macos.py
 ```
 
-默认构建本机架构，输出 `dist/FrameLink-3.1.0-dev-macOS-arm64.zip` 或 `macOS-x64.zip`，内含 `.app`。添加 `--target x86_64-apple-darwin` 可选择 Intel 目标，需先通过 rustup 安装对应目标。添加 `--ndi-runtime /绝对路径/libndi.dylib` 可打包运行库；不提供时仍可打开界面和运行转换基准。命令行也可通过 `FRAMELINK_NDI_RUNTIME` 指定运行库绝对路径。应用使用本机临时签名，未做 Apple 公证。
+默认构建本机架构，输出 `dist/FrameLink-3.1.0-dev-macOS-arm64.zip` 或 `macOS-x64.zip`，内含 `.app` 与 NDI 运行库。首次打包会从 [NDI 官方下载地址](https://ndi.link/NDIRedistV6Apple)获取固定版本的运行库，校验安装包签名和 SHA-256 后提取到本机 `runtime/macos/` 缓存，不执行系统安装，也不将二进制提交到源码仓库。
+
+添加 `--target x86_64-apple-darwin` 可选择 Intel 目标，需先通过 rustup 安装对应目标。`--ndi-runtime /绝对路径/libndi.dylib` 可指定其他运行库；`--without-ndi` 仅用于界面开发包。命令行可通过 `FRAMELINK_NDI_RUNTIME` 指定运行库绝对路径。应用使用本机临时签名，未做 Apple 公证；内置运行库保留原厂签名，许可文件也放在应用包内。
 
 Windows 安装 Visual Studio 2022 C++ Build Tools / Windows SDK，将 `Processing.NDI.Lib.x64.dll` 放到项目根目录后运行：
 
@@ -75,6 +77,12 @@ Mac 构建包无需安装 Rust，在解压目录直接运行：
 
 ```sh
 ./FrameLink.app/Contents/MacOS/FrameLink --benchmark-pixels 2
+```
+
+检查实际加载的 NDI 路径、版本和初始化结果，不采集或发送屏幕：
+
+```sh
+./FrameLink.app/Contents/MacOS/FrameLink --check-ndi
 ```
 
 基准覆盖 512 / 640 的 NV12 转换和 BGRX 复制，仅衡量这两个 CPU 环节，不包含采集、NDI 编码、网络或端到端延迟。界面截图来自程序离屏渲染，不启动采集或发送。

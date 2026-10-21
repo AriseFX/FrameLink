@@ -56,23 +56,25 @@ mod runtime {
     type SourceName = unsafe extern "C" fn(*mut c_void) -> *const Source;
 
     #[cfg(windows)]
-    fn load_library() -> Result<Library, String> {
+    fn load_library() -> Result<(Library, std::path::PathBuf), String> {
         let exe = std::env::current_exe().map_err(|e| format!("无法获取程序路径：{e}"))?;
         let path = exe
             .parent()
             .ok_or("无法获取程序目录")?
             .join("Processing.NDI.Lib.x64.dll");
         // Keep the Windows runtime beside the executable, outside DLL search paths.
-        unsafe { Library::new(&path) }.map_err(|e| {
-            format!(
-                "无法加载 {}。请将NDI运行库放在EXE旁，并安装VC++ x64运行库。{e}",
-                path.display()
-            )
-        })
+        unsafe { Library::new(&path) }
+            .map(|library| (library, path.clone()))
+            .map_err(|e| {
+                format!(
+                    "无法加载 {}。请将NDI运行库放在EXE旁，并安装VC++ x64运行库。{e}",
+                    path.display()
+                )
+            })
     }
 
     #[cfg(target_os = "macos")]
-    fn load_library() -> Result<Library, String> {
+    fn load_library() -> Result<(Library, std::path::PathBuf), String> {
         let exe = std::env::current_exe().map_err(|e| format!("无法获取程序路径：{e}"))?;
         let override_path = std::env::var_os("FRAMELINK_NDI_RUNTIME");
         let candidates = super::macos_runtime_paths(&exe, override_path.as_deref())?;
@@ -81,12 +83,12 @@ mod runtime {
             // All candidates are absolute. Never search the working directory or
             // depend on DYLD_LIBRARY_PATH when launched from Finder.
             match unsafe { Library::new(&path) } {
-                Ok(library) => return Ok(library),
+                Ok(library) => return Ok((library, path)),
                 Err(error) => failures.push(format!("{}：{error}", path.display())),
             }
         }
         Err(format!(
-            "无法加载 macOS NDI 运行库。请安装 NDI Runtime，或将 libndi.dylib 放入应用的 Contents/Frameworks；也可用 FRAMELINK_NDI_RUNTIME 指定绝对路径。\n{}",
+            "无法加载 macOS NDI 运行库。请重新解压包含运行库的完整 FrameLink 包；开发环境也可用 FRAMELINK_NDI_RUNTIME 指定绝对路径。\n{}",
             failures.join("\n")
         ))
     }
@@ -94,6 +96,7 @@ mod runtime {
     pub struct Ndi {
         // Function pointers remain valid because this library outlives every sender.
         _library: Library,
+        runtime_path: std::path::PathBuf,
         destroy: Destroy,
         version: Version,
         create: SendCreate,
@@ -104,7 +107,7 @@ mod runtime {
     }
     impl Ndi {
         pub fn load() -> Result<Self, String> {
-            let library = load_library()?;
+            let (library, runtime_path) = load_library()?;
             unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
                 unsafe { lib.get::<T>(name) }.map(|f| *f).map_err(|e| {
                     format!(
@@ -132,6 +135,7 @@ mod runtime {
             }
             Ok(Self {
                 _library: library,
+                runtime_path,
                 destroy,
                 version,
                 create,
@@ -143,6 +147,9 @@ mod runtime {
         }
         pub fn version(&self) -> String {
             string(unsafe { (self.version)() })
+        }
+        pub fn runtime_path(&self) -> &std::path::Path {
+            &self.runtime_path
         }
         pub fn create_sender(&self, name: &str) -> Result<Sender<'_>, String> {
             let name = CString::new(name).map_err(|_| "源名称含有空字符")?;

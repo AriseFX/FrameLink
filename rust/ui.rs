@@ -270,7 +270,17 @@ impl DesktopApp {
                             .strong()
                             .color(INK),
                     );
-                    pill(ui, "NDI", Color32::from_rgb(235, 239, 247), MUTED, false);
+                    egui::Frame::new()
+                        .fill(Color32::from_rgb(235, 239, 247))
+                        .corner_radius(20.0)
+                        .inner_margin(egui::Margin::symmetric(9, 4))
+                        .show(ui, |ui| {
+                            ui.hyperlink_to(
+                                RichText::new("NDI®").size(10.5).color(MUTED),
+                                "https://ndi.video/",
+                            )
+                            .on_hover_text("NDI® is a registered trademark of Vizrt NDI AB");
+                        });
                 });
                 ui.label(
                     RichText::new("低延迟屏幕传输，连接远端分析")
