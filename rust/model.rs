@@ -57,6 +57,8 @@ pub struct Monitor {
 pub struct Config {
     pub name: String,
     pub monitor: String,
+    /// Empty follows existing NDI settings; otherwise a stable Windows adapter ID.
+    pub network_adapter: String,
     pub region: Region,
     #[serde(default)]
     pub preset: Option<u32>,
@@ -76,6 +78,7 @@ impl Default for Config {
         Self {
             name: crate::brand::APP_ID.into(),
             monitor: String::new(),
+            network_adapter: String::new(),
             region: Region {
                 x: 0,
                 y: 0,

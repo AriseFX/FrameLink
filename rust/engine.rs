@@ -48,6 +48,8 @@ impl Engine {
     }
     pub fn start(&mut self, config: Config) -> Result<(), String> {
         config.validate()?;
+        #[cfg(windows)]
+        crate::network::validate_selection(&config.network_adapter)?;
         self.poll();
         if self.worker.is_some() || self.is_running() {
             return Err("上一发送会话仍在结束，请稍候".into());

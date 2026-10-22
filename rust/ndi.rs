@@ -107,6 +107,8 @@ mod runtime {
     }
     impl Ndi {
         pub fn load() -> Result<Self, String> {
+            #[cfg(windows)]
+            crate::network::ensure_ready()?;
             let (library, runtime_path) = load_library()?;
             unsafe fn symbol<T: Copy>(lib: &Library, name: &[u8]) -> Result<T, String> {
                 unsafe { lib.get::<T>(name) }.map(|f| *f).map_err(|e| {

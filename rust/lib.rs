@@ -10,6 +10,8 @@ pub mod diagnostics;
 pub mod engine;
 pub mod model;
 pub mod ndi;
+pub mod network;
+pub mod network_adapters;
 pub mod pixels;
 pub mod policy;
 pub mod settings;

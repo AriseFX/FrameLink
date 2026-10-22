@@ -35,6 +35,7 @@ fn run() -> Result<(), String> {
         {
             let _instance = framelink::single_instance::PrimaryInstance::acquire()?
                 .ok_or("请先退出已运行的 FrameLink，再开始发送诊断")?;
+            framelink::network::initialize(&framelink::settings::load().0.network_adapter);
             let seconds = args[1].parse::<f64>().map_err(|_| "诊断运行时间需为数字")?;
             return framelink::diagnostics::measure_send(seconds, std::path::Path::new(&args[2]));
         }
@@ -47,6 +48,11 @@ fn run() -> Result<(), String> {
         }
         #[cfg(any(windows, target_os = "macos"))]
         {
+            #[cfg(windows)]
+            let _instance = framelink::single_instance::PrimaryInstance::acquire()?
+                .ok_or("请先退出已运行的 FrameLink，再检查 NDI 运行库")?;
+            #[cfg(windows)]
+            framelink::network::initialize(&framelink::settings::load().0.network_adapter);
             let ndi = framelink::ndi::Ndi::load()?;
             println!(
                 "{}",
@@ -90,6 +96,8 @@ fn run() -> Result<(), String> {
         Some(instance) => instance,
         None => return Ok(()),
     };
+    #[cfg(windows)]
+    framelink::network::initialize(&framelink::settings::load().0.network_adapter);
     let icon = eframe::icon_data::from_png_bytes(&icon_png()?).map_err(|e| e.to_string())?;
     let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
@@ -117,7 +125,12 @@ fn run() -> Result<(), String> {
     )
     .map_err(|e| e.to_string());
     #[cfg(windows)]
-    drop(instance);
+    {
+        drop(instance);
+        if result.is_ok() && framelink::network::restart_requested() {
+            framelink::network::restart()?;
+        }
+    }
     result
 }
 fn icon_png() -> Result<Vec<u8>, String> {

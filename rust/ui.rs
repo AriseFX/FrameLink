@@ -13,6 +13,8 @@ pub struct DesktopApp {
     config: Config,
     engine: Engine,
     monitors: Vec<Monitor>,
+    adapters: Vec<crate::network_adapters::Adapter>,
+    adapter_error: Option<String>,
     stats: Stats,
     error: Option<String>,
     dismissed_worker_error: Option<String>,
@@ -119,10 +121,24 @@ impl DesktopApp {
         let tray_available = tray.is_some();
         #[cfg(not(windows))]
         let tray_available = false;
+        let (adapters, adapter_error) = if cfg!(windows) && !snapshot {
+            match crate::network_adapters::enumerate() {
+                Ok(adapters) => (adapters, None),
+                Err(error) => (Vec::new(), Some(error)),
+            }
+        } else {
+            (Vec::new(), None)
+        };
+        #[cfg(windows)]
+        if !snapshot {
+            error = error.or_else(crate::network::startup_error);
+        }
         Self {
             config,
             engine,
             monitors,
+            adapters,
+            adapter_error,
             stats: Stats::default(),
             error,
             dismissed_worker_error: None,
@@ -571,6 +587,12 @@ impl DesktopApp {
                         .color(MUTED),
                     );
                 });
+                if !macos_capture {
+                    ui.add_space(12.0);
+                    divider(ui);
+                    ui.add_space(10.0);
+                    ui.add_enabled_ui(!running && !self.exiting, |ui| self.network_controls(ui));
+                }
                 ui.add_space(13.0);
                 divider(ui);
                 ui.add_space(5.0);
@@ -642,6 +664,117 @@ impl DesktopApp {
             });
         if toml::to_string(&self.config).unwrap_or_default() != before {
             self.dirty_at = Some(Instant::now());
+        }
+    }
+
+    fn network_controls(&mut self, ui: &mut egui::Ui) {
+        let selected = self
+            .adapters
+            .iter()
+            .find(|a| a.id == self.config.network_adapter);
+        let name = if self.config.network_adapter.is_empty() {
+            "自动选择".to_owned()
+        } else {
+            selected.map_or_else(|| "已选网卡不可用".into(), |a| a.name.clone())
+        };
+        ui.horizontal(|ui| {
+            ui.label(RichText::new("发送网卡").size(11.5).color(INK));
+            egui::ComboBox::from_id_salt("network-adapter")
+                .width((ui.available_width() - 45.0).max(100.0))
+                .truncate()
+                .selected_text(name)
+                .show_ui(ui, |ui| {
+                ui.set_max_width(390.0);
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Wrap);
+                ui.selectable_value(&mut self.config.network_adapter, String::new(), "自动选择");
+                for adapter in &self.adapters {
+                    let available = adapter.connected && !adapter.ipv4.is_empty();
+                    let text = if available {
+                        format!("{} · {}", adapter.name, adapter.ipv4[0])
+                    } else {
+                        format!("{} · 未连接 / 无 IPv4", adapter.name)
+                    };
+                    ui.add_enabled_ui(available, |ui| {
+                        ui.selectable_value(
+                            &mut self.config.network_adapter,
+                            adapter.id.clone(),
+                            text,
+                        );
+                    });
+                }
+                })
+                .response
+                .on_hover_text("自动选择沿用现有 NDI 设置；指定网卡后需重启应用。仅影响 FrameLink，不修改系统网卡设置。");
+            if ui.small_button("刷新").clicked() && !self.snapshot {
+                match crate::network_adapters::enumerate() {
+                    Ok(adapters) => {
+                        self.adapters = adapters;
+                        self.adapter_error = None;
+                    }
+                    Err(error) => self.adapter_error = Some(error),
+                }
+            }
+        });
+        let selected = self
+            .adapters
+            .iter()
+            .find(|a| a.id == self.config.network_adapter);
+        let detail = if self.config.network_adapter.is_empty() {
+            String::new()
+        } else if let Some(adapter) = selected {
+            if adapter.connected && !adapter.ipv4.is_empty() {
+                let ips = adapter
+                    .ipv4
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" / ");
+                let speed = if adapter.link_speed_bps == 0 {
+                    "速率未知".to_owned()
+                } else if adapter.link_speed_bps >= 1_000_000_000 {
+                    format!(
+                        "{:.1} Gbps",
+                        adapter.link_speed_bps as f64 / 1_000_000_000.0
+                    )
+                } else {
+                    format!("{} Mbps", adapter.link_speed_bps / 1_000_000)
+                };
+                format!("{ips} · {speed}")
+            } else {
+                "网卡未连接，或没有可用 IPv4 地址".into()
+            }
+        } else {
+            "请连接网卡后刷新，或选择其他网卡".into()
+        };
+        if !detail.is_empty() {
+            ui.add_space(4.0);
+            ui.label(RichText::new(detail).size(11.0).color(MUTED))
+                .on_hover_text("指定网卡仅作用于 FrameLink 的 NDI 主视频数据。连接速率不等于实际吞吐量；不会修改系统网卡设置。");
+        }
+        if let Some(error) = &self.adapter_error {
+            ui.label(
+                RichText::new(error)
+                    .size(11.0)
+                    .color(Color32::from_rgb(181, 58, 64)),
+            );
+        }
+        #[cfg(windows)]
+        if !self.snapshot
+            && crate::network::restart_required(&self.config.network_adapter, &self.adapters)
+        {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("重启后生效").size(11.0).color(MUTED));
+                if ui.small_button("应用并重启").clicked() {
+                    match crate::settings::save(&self.config) {
+                        Ok(()) => {
+                            self.dirty_at = None;
+                            crate::network::request_restart();
+                            self.request_exit();
+                        }
+                        Err(error) => self.error = Some(error),
+                    }
+                }
+            });
         }
     }
 
@@ -1085,6 +1218,13 @@ impl DesktopApp {
         self.preview_sequence = None;
         if let Err(error) = self.engine.start(self.config.clone()) {
             self.error = Some(error);
+            #[cfg(windows)]
+            if !self.config.network_adapter.is_empty()
+                && let Ok(adapters) = crate::network_adapters::enumerate()
+            {
+                // Refresh the restart action after a disconnect or DHCP change is detected.
+                self.adapters = adapters;
+            }
         }
     }
     fn save(&mut self) {

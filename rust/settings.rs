@@ -185,12 +185,16 @@ mod tests {
         let c = Config {
             preview: true,
             precision: true,
+            network_adapter: "{stable-adapter-id}".into(),
             ..Config::default()
         };
         let text = toml::to_string(&c).unwrap();
         let restored = parse(&text).unwrap();
         assert!(restored.preview && restored.precision);
         assert_eq!(restored.region, c.region);
+        assert_eq!(restored.network_adapter, c.network_adapter);
+        // Existing installations have no adapter setting and continue to follow NDI.
+        assert!(parse("fps = 240").unwrap().network_adapter.is_empty());
     }
     #[test]
     fn custom_region_does_not_become_a_center_preset_on_restart() {

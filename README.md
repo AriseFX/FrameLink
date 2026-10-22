@@ -4,7 +4,7 @@
 
 ![FrameLink](docs/ui/desktop-1200.png)
 
-当前版本：`3.1.1-dev`。应用代码使用 Rust，颜色转换使用 libyuv 的 SIMD 实现。
+当前版本：`3.1.2-dev`。应用代码使用 Rust，颜色转换使用 libyuv 的 SIMD 实现。
 
 ## 使用
 
@@ -15,6 +15,8 @@ macOS：解压对应架构的构建包，打开 `FrameLink.app`。完整包内�
 1. 选择显示器和采集区域，填写 NDI 源名称。
 2. 点击“开始发送”。首次默认中心 512×512、240 fps、NV12、自动采集，关闭鼠标和预览。
 3. 在同一局域网的接收软件中选择 `电脑名 (源名称)`。Windows 防火墙需允许专用网络通信。
+
+Windows 可在“发送网卡”中选择有线网卡，查看本机 IPv4 和连接速率。切换后点击“应用并重启”，再开始发送；“自动选择”沿用原有 NDI 设置。选择会记住网卡本身，下次启动按当前 IP 配置，适用于有线、Wi-Fi 或虚拟网卡并存的情况。单独指定网卡不保证降低延迟。
 
 发送时可切换预览；调整采集参数需先停止。Windows 关闭窗口默认收到托盘并继续发送，双击托盘图标恢复，右键可停止或退出；再次启动程序会恢复已有窗口，保留原发送任务和设置。
 
@@ -36,7 +38,7 @@ macOS 安装 Xcode Command Line Tools（包含 Swift 和 macOS SDK）后运行�
 python3 tools/build_macos.py
 ```
 
-默认构建本机架构，输出 `dist/FrameLink-3.1.1-dev-macOS-arm64.zip` 或 `macOS-x64.zip`，内含 `.app` 与 NDI 运行库。首次打包会从 [NDI 官方下载地址](https://ndi.link/NDIRedistV6Apple)获取固定版本的运行库，校验安装包签名和 SHA-256 后提取到本机 `runtime/macos/` 缓存，不执行系统安装，也不将二进制提交到源码仓库。
+默认构建本机架构，输出 `dist/FrameLink-3.1.2-dev-macOS-arm64.zip` 或 `macOS-x64.zip`，内含 `.app` 与 NDI 运行库。首次打包会从 [NDI 官方下载地址](https://ndi.link/NDIRedistV6Apple)获取固定版本的运行库，校验安装包签名和 SHA-256 后提取到本机 `runtime/macos/` 缓存，不执行系统安装，也不将二进制提交到源码仓库。
 
 添加 `--target x86_64-apple-darwin` 可选择 Intel 目标，需先通过 rustup 安装对应目标。`--ndi-runtime /绝对路径/libndi.dylib` 可指定其他运行库；`--without-ndi` 仅用于界面开发包。命令行可通过 `FRAMELINK_NDI_RUNTIME` 指定运行库绝对路径。应用使用本机临时签名，未做 Apple 公证；内置运行库保留原厂签名，许可文件也放在应用包内。
 
@@ -53,7 +55,7 @@ rustup target add x86_64-pc-windows-gnu
 python3 tools/build_rust.py
 ```
 
-输出为 `dist/FrameLink-3.1.1-dev-Windows-x64.zip`。已有 Release 编译结果时，可加 `--skip-build` 只打包。只编译程序可使用：
+输出为 `dist/FrameLink-3.1.2-dev-Windows-x64.zip`。已有 Release 编译结果时，可加 `--skip-build` 只打包。只编译程序可使用：
 
 ```sh
 cargo build --locked --release --target x86_64-pc-windows-msvc --bin FrameLink
