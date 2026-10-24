@@ -62,6 +62,7 @@ pub(super) struct Measurements {
     pub(super) capture: f64,
     pub(super) conversion: f64,
     pub(super) submit: f64,
+    pub(super) wait: f64,
     pub(super) count: u64,
 }
 

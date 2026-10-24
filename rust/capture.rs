@@ -44,6 +44,16 @@ impl fmt::Display for CaptureError {
 }
 impl std::error::Error for CaptureError {}
 
+/// Result of one acquisition: whether the pixels are new and how long the call
+/// blocked inside the desktop compositor. That block is idle waiting, not work.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Acquired {
+    pub changed: bool,
+    /// Time spent waiting for the next desktop update. GDI polls the desktop
+    /// directly, so it never waits and its whole capture cost is sender work.
+    pub wait: Duration,
+}
+
 /// Per-acquisition timings and desktop metadata. These are not network latency.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CaptureDiagnostics {
@@ -520,7 +530,7 @@ impl DxgiCapture {
             "DXGI采集区域必须完整位于一台活动显示器内；跨屏请使用兼容采集（GDI）".into(),
         ))
     }
-    fn acquire(&mut self, timeout_ms: u32) -> Result<Option<bool>, CaptureError> {
+    fn acquire(&mut self, timeout_ms: u32) -> Result<Option<Acquired>, CaptureError> {
         self.diagnostics = CaptureDiagnostics {
             last_present_qpc: self.diagnostics.last_present_qpc,
             ..CaptureDiagnostics::default()
@@ -538,14 +548,15 @@ impl DxgiCapture {
         let mut info = DXGI_OUTDUPL_FRAME_INFO::default();
         let mut resource = None;
         let mut changed = false;
-        let acquire_started = self.diagnostics_enabled.then(Instant::now);
+        // Compositor blocking is measured even with diagnostics off: the sender
+        // reports that idle waiting separately from its own processing cost.
+        let acquire_started = Instant::now();
         let acquired = unsafe {
             self.duplication
                 .AcquireNextFrame(timeout_ms, &mut info, &mut resource)
         };
-        if let Some(started) = acquire_started {
-            self.diagnostics.acquire_ms = started.elapsed().as_secs_f64() * 1000.0;
-        }
+        let waited = acquire_started.elapsed();
+        self.diagnostics.acquire_ms = waited.as_secs_f64() * 1000.0;
         match acquired {
             Ok(()) => {
                 let frame = FrameLease::new(DxgiFrame(self.duplication.clone()));
@@ -605,7 +616,10 @@ impl DxgiCapture {
             return Ok(None);
         }
         self.last_yield = Instant::now();
-        Ok(Some(changed))
+        Ok(Some(Acquired {
+            changed,
+            wait: waited,
+        }))
     }
     fn with_bgra<T>(
         &mut self,
@@ -704,7 +718,7 @@ impl Capture {
             },
         })
     }
-    pub fn acquire(&mut self, timeout_ms: u32) -> Result<Option<bool>, CaptureError> {
+    pub fn acquire(&mut self, timeout_ms: u32) -> Result<Option<Acquired>, CaptureError> {
         match &mut self.inner {
             CaptureInner::Dxgi(c) => c.acquire(timeout_ms),
             CaptureInner::Gdi {
@@ -725,7 +739,11 @@ impl Capture {
                 }
                 result?;
                 *has_image = true;
-                Ok(Some(true))
+                // GDI copies the desktop synchronously; it never idles here.
+                Ok(Some(Acquired {
+                    changed: true,
+                    wait: Duration::ZERO,
+                }))
             }
         }
     }

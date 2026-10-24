@@ -373,6 +373,12 @@ mod windows_worker {
         }
     }
 
+    /// Sender processing excludes the time the loop spent blocked inside the
+    /// compositor, so both frame-pacing modes report the same kind of cost.
+    fn processing_time(began: Instant, captured: Instant, wait: Duration) -> Duration {
+        captured.duration_since(began).saturating_sub(wait)
+    }
+
     fn validate_desktop_region(config: &Config) -> Result<(), String> {
         // Enumeration can temporarily fail on desktop/session transitions.
         // A real nonempty display layout provides enough evidence to stop an
@@ -432,6 +438,7 @@ mod windows_worker {
                     s.capture_ms = 0.0;
                     s.conversion_ms = 0.0;
                     s.submit_ms = 0.0;
+                    s.wait_ms = 0.0;
                     s.receivers = receivers;
                     s.uptime_sec = started.elapsed().as_secs_f64();
                 });
@@ -453,11 +460,11 @@ mod windows_worker {
             let result = (|| -> Result<(), CaptureError> {
                 // Unlimited acquisition is bounded so stop and recovery remain responsive.
                 let acquired = current.acquire(if config.unlimited { 20 } else { 0 })?;
-                let Some(changed) = acquired else {
+                let Some(acquired) = acquired else {
                     return Ok(());
                 };
                 // Capture suppresses unlimited-mode repeats except its one-second heartbeat.
-                let plan = slots.prepare(changed);
+                let plan = slots.prepare(acquired.changed);
                 let mut captured = Instant::now();
                 let mut converted = captured;
                 if plan.refresh {
@@ -488,7 +495,9 @@ mod windows_worker {
                 } else {
                     repeats += 1;
                 }
-                measurements.capture += (captured - began).as_secs_f64() * 1000.0;
+                measurements.capture +=
+                    processing_time(began, captured, acquired.wait).as_secs_f64() * 1000.0;
+                measurements.wait += acquired.wait.as_secs_f64() * 1000.0;
                 measurements.conversion += (converted - captured).as_secs_f64() * 1000.0;
                 measurements.submit += (submitted - converted).as_secs_f64() * 1000.0;
                 measurements.count += 1;
@@ -563,6 +572,7 @@ mod windows_worker {
                     s.capture_ms = measurements.capture / n;
                     s.conversion_ms = measurements.conversion / n;
                     s.submit_ms = measurements.submit / n;
+                    s.wait_ms = measurements.wait / n;
                     s.uptime_sec = now.duration_since(started).as_secs_f64();
                     if config.diagnostics {
                         s.timings.clone_from(&timings);
@@ -591,6 +601,29 @@ mod windows_worker {
         // before stable pixel buffers/descriptors are dropped, including unwind.
         drop(stream);
         Ok(())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        #[test]
+        fn processing_time_excludes_compositor_wait() {
+            let began = Instant::now();
+            let captured = began + Duration::from_micros(5_000);
+            assert_eq!(
+                processing_time(began, captured, Duration::from_micros(4_000)),
+                Duration::from_micros(1_000)
+            );
+            assert_eq!(
+                processing_time(began, captured, Duration::ZERO),
+                Duration::from_micros(5_000)
+            );
+            // Clock granularity can report a longer wait than the span; never underflow.
+            assert_eq!(
+                processing_time(began, captured, Duration::from_micros(9_000)),
+                Duration::ZERO
+            );
+        }
     }
 }
 

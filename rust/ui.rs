@@ -888,7 +888,7 @@ impl DesktopApp {
         });
         ui.add_space(16.0);
         let active = self.engine.is_running() && self.stats.frames > 0;
-        let width = ((ui.available_width() - 24.0) / 3.0).max(70.0);
+        let width = ((ui.available_width() - 36.0) / 4.0).max(70.0);
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = 12.0;
             metric(
@@ -928,8 +928,25 @@ impl DesktopApp {
                     "—".into()
                 },
                 "ms",
-                "不包含网络与接收端耗时",
-                Some("采集、颜色转换与 NDI 提交的合计耗时。此数值不是端到端延迟。"),
+                "不含等待与网络",
+                Some(
+                    "采集拷贝、颜色转换与 NDI 提交的合计耗时，不含等待桌面新帧的空闲时间、网络与接收端。此数值不是端到端延迟。",
+                ),
+            );
+            metric(
+                ui,
+                width,
+                "等新帧",
+                if active {
+                    format!("{:.2}", self.stats.wait_ms)
+                } else {
+                    "—".into()
+                },
+                "ms",
+                "空闲等待，不计入处理",
+                Some(
+                    "上一帧提交后等待桌面出新画面的空闲时间，不计入“发送端处理”。跟随刷新率模式要等到下一帧出现才采集，帧一出现就立即发出，这段等待不会增加画面延迟；固定帧率模式按节拍取帧，这里接近 0。",
+                ),
             );
         });
         ui.add_space(15.0);

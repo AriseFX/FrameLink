@@ -51,9 +51,13 @@ pub(super) fn run(shared: &Shared, config: &Config) -> Result<(), String> {
     let mut frames = 0u64;
     let mut window_frames = 0u64;
     while !shared.stop.load(Ordering::Acquire) {
+        let polled_at = Instant::now();
         let frame = capture
             .next_frame(Duration::from_millis(20))
             .map_err(capture_message)?;
+        // Sample callbacks wait for the compositor, which is idle time rather
+        // than processing work; readback still counts as capture cost.
+        let polled = polled_at.elapsed();
         if let Some(frame) = frame {
             if shared.stop.load(Ordering::Acquire) {
                 break;
@@ -75,6 +79,8 @@ pub(super) fn run(shared: &Shared, config: &Config) -> Result<(), String> {
             measurements.capture += frame.readback_duration.as_secs_f64() * 1000.0;
             measurements.conversion += (converted - captured).as_secs_f64() * 1000.0;
             measurements.submit += (submitted - converted).as_secs_f64() * 1000.0;
+            measurements.wait +=
+                polled.saturating_sub(frame.readback_duration).as_secs_f64() * 1000.0;
             measurements.count += 1;
             if shared.preview_enabled.load(Ordering::Relaxed)
                 && submitted.duration_since(last_preview) >= Duration::from_millis(500)
@@ -108,6 +114,7 @@ pub(super) fn run(shared: &Shared, config: &Config) -> Result<(), String> {
                 stats.capture_ms = measurements.capture / count;
                 stats.conversion_ms = measurements.conversion / count;
                 stats.submit_ms = measurements.submit / count;
+                stats.wait_ms = measurements.wait / count;
                 stats.uptime_sec = now.duration_since(started).as_secs_f64();
             });
             last_stats = now;

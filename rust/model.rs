@@ -163,6 +163,7 @@ pub struct Stats {
     pub capture_ms: f64,
     pub conversion_ms: f64,
     pub submit_ms: f64,
+    pub wait_ms: f64,
     pub frames: u64,
     pub repeats: u64,
     pub uptime_sec: f64,
