@@ -587,7 +587,10 @@ impl DesktopApp {
                             ui.add_space(15.0);
                             ui.checkbox(
                                 &mut self.config.unlimited,
-                                RichText::new("无上限").size(12.0),
+                                RichText::new("跟随刷新率").size(12.0),
+                            )
+                            .on_hover_text(
+                                "不使用上方帧率：屏幕每更新一次就发一帧，不补帧、不重复。",
                             );
                         }
                     });
@@ -595,8 +598,10 @@ impl DesktopApp {
                     ui.label(
                         RichText::new(if macos_capture {
                             "帧率上限，实际采集取决于屏幕更新"
+                        } else if self.config.unlimited {
+                            "跟随屏幕更新：画面变化多少就发多少"
                         } else {
-                            "240 Hz 显示器建议从 240 fps 开始"
+                            "固定帧率：高于屏幕更新会产生重复帧"
                         })
                         .size(11.0)
                         .color(MUTED),
@@ -1152,7 +1157,7 @@ impl DesktopApp {
                                 .corner_radius(8.0),
                         )
                         .on_hover_text(if self.tray_available {
-                            "窗口隐藏后，发送会继续；点击托盘图标可恢复。"
+                            "窗口隐藏后，发送会继续；双击托盘图标恢复，右键打开菜单。"
                         } else {
                             "托盘仅在 Windows 运行时可用。"
                         })

@@ -27,7 +27,7 @@ def main():
     executable = root / "target" / args.target / "release/FrameLink.exe"
     if not executable.is_file():
         parser.error(f"Missing executable: {executable}")
-    metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version", "1"], cwd=root, text=True))
+    metadata = json.loads(subprocess.check_output(["cargo", "metadata", "--locked", "--format-version", "1"], cwd=root, text=True, encoding="utf-8"))
     version = next(p["version"] for p in metadata["packages"] if p["name"] == "framelink" and not p.get("source"))
     package = root / f"dist/FrameLink-{version}-Windows-x64"
     package_files = ((executable, "FrameLink.exe"),
@@ -78,7 +78,7 @@ def main():
 解压整个文件夹，启动 FrameLink.exe，保留同目录 NDI DLL。
 适用于 Windows 10 / 11 x64。NDI DLL 可能需要 VC++ 2015–2022 x64 运行库。
 默认中心512x512、240fps、关闭鼠标与预览；可选择640或在屏幕上框选。
-关闭窗口默认收到托盘并继续发送，右键托盘可停止或退出。
+关闭窗口默认收到托盘并继续发送，双击托盘图标恢复，右键打开菜单（停止发送/退出）。
 再次双击 FrameLink.exe 或快捷方式会恢复并激活已有窗口，保留原发送任务和设置。
 升级到本版前请先退出旧版；单实例窗口恢复适用于原进程所在的交互桌面。
 首次启动优先导入上一版 Rust 设置，兼容旧 C++ INI，原文件保留。

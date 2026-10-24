@@ -91,8 +91,13 @@ mod implementation {
             let (width, height) = image.dimensions();
             let icon =
                 Icon::from_rgba(image.into_raw(), width, height).map_err(|e| e.to_string())?;
+            // Right button opens the menu, left double click restores the
+            // window. tray-icon pops the menu on left click by default, which
+            // blocks the menu loop for the first click of a double click and
+            // would make the icon open the menu instead of the window.
             let icon = TrayIconBuilder::new()
                 .with_menu(Box::new(menu))
+                .with_menu_on_left_click(false)
                 .with_tooltip("FrameLink 帧连 · 屏幕推流")
                 .with_icon(icon)
                 .build()

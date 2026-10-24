@@ -124,7 +124,7 @@ impl Config {
             return Err("固定帧率范围是1–1000 fps".into());
         }
         if self.unlimited && self.backend == Backend::Gdi {
-            return Err("无上限模式需要DXGI采集".into());
+            return Err("跟随刷新率模式需要DXGI采集".into());
         }
         if !(-100_000..=100_000).contains(&r.x) || !(-100_000..=100_000).contains(&r.y) {
             return Err("采集坐标超出支持范围".into());
