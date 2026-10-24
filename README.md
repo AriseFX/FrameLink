@@ -55,6 +55,8 @@ rustup target add x86_64-pc-windows-gnu
 python3 tools/build_rust.py
 ```
 
+Windows 本机同样需要完整的 MinGW-w64：`bin` 里除编译器外还要有 `x86_64-w64-mingw32-windres` 以及 `libstdc++-6.dll`、`libwinpthread-1.dll`、`libgcc_s_seh-1.dll`。缺少运行库时 `g++` 直接以 0xC0000135 退出，`cargo clippy` 重编 build script 时还会报 windres 缺失，只有已缓存的 `cargo build` 能侥幸通过。
+
 输出为 `dist/FrameLink-3.1.2-dev-Windows-x64.zip`。已有 Release 编译结果时，可加 `--skip-build` 只打包。只编译程序可使用：
 
 ```sh

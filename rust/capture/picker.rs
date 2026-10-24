@@ -43,7 +43,8 @@ impl Picker {
         unsafe {
             for pixel in
                 std::slice::from_raw_parts_mut(dimmed.pixels, dimmed.stride() * dimmed.height)
-                    .chunks_exact_mut(4)
+                    .as_chunks_mut::<4>()
+                    .0
             {
                 pixel[0] = (u16::from(pixel[0]) * 36 / 100) as u8;
                 pixel[1] = (u16::from(pixel[1]) * 36 / 100) as u8;

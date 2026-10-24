@@ -281,7 +281,7 @@ impl DesktopApp {
                         center + egui::vec2(offset, -height / 2.0),
                         center + egui::vec2(offset, height / 2.0),
                     ],
-                    Stroke::new(2.6, Color32::WHITE),
+                    Stroke::new(2.6_f32, Color32::WHITE),
                 );
             }
             ui.add_space(10.0);
@@ -504,7 +504,7 @@ impl DesktopApp {
                                     [ui.available_width(), 29.0],
                                     egui::Button::new(RichText::new("在屏幕上框选区域").size(12.0))
                                         .fill(Color32::WHITE)
-                                        .stroke(Stroke::new(1.0, LINE))
+                                        .stroke(Stroke::new(1.0_f32, LINE))
                                         .corner_radius(6.0),
                                 )
                             })
@@ -1013,7 +1013,7 @@ impl DesktopApp {
         p.rect_stroke(
             screen,
             8.0,
-            Stroke::new(1.3, Color32::from_rgb(203, 214, 233)),
+            Stroke::new(1.3_f32, Color32::from_rgb(203, 214, 233)),
             egui::StrokeKind::Inside,
         );
         let monitor = self.selected_monitor();
@@ -1042,7 +1042,7 @@ impl DesktopApp {
         p.rect_stroke(
             crop,
             3.0,
-            Stroke::new(1.4, ACCENT),
+            Stroke::new(1.4_f32, ACCENT),
             egui::StrokeKind::Inside,
         );
         for corner in [
@@ -1056,14 +1056,14 @@ impl DesktopApp {
         let stem_top = egui::pos2(screen.center().x, screen.bottom());
         p.line_segment(
             [stem_top, stem_top + egui::vec2(0.0, 11.0)],
-            Stroke::new(2.0, Color32::from_rgb(203, 214, 233)),
+            Stroke::new(2.0_f32, Color32::from_rgb(203, 214, 233)),
         );
         p.line_segment(
             [
                 stem_top + egui::vec2(-17.0, 12.0),
                 stem_top + egui::vec2(17.0, 12.0),
             ],
-            Stroke::new(2.0, Color32::from_rgb(203, 214, 233)),
+            Stroke::new(2.0_f32, Color32::from_rgb(203, 214, 233)),
         );
         p.text(
             egui::pos2(rect.center().x, screen.top() - 20.0),
@@ -1170,7 +1170,7 @@ impl DesktopApp {
                             egui::Button::new(RichText::new("收起到托盘").size(12.0).color(MUTED))
                                 .min_size(egui::vec2(112.0, 38.0))
                                 .fill(Color32::WHITE)
-                                .stroke(Stroke::new(1.0, LINE))
+                                .stroke(Stroke::new(1.0_f32, LINE))
                                 .corner_radius(8.0),
                         )
                         .on_hover_text(if self.tray_available {
@@ -1453,16 +1453,17 @@ fn install_style(ctx: &egui::Context) {
     style.visuals.panel_fill = CANVAS;
     style.visuals.window_fill = Color32::WHITE;
     style.visuals.selection.bg_fill = Color32::from_rgb(220, 232, 255);
-    style.visuals.selection.stroke = Stroke::new(1.0, ACCENT);
+    style.visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT);
     style.visuals.widgets.inactive.bg_fill = Color32::WHITE;
     style.visuals.widgets.inactive.weak_bg_fill = Color32::WHITE;
-    style.visuals.widgets.inactive.bg_stroke = Stroke::new(1.0, LINE);
+    style.visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, LINE);
     style.visuals.widgets.hovered.bg_fill = Color32::from_rgb(239, 244, 255);
     style.visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(239, 244, 255);
-    style.visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgb(155, 183, 245));
+    style.visuals.widgets.hovered.bg_stroke =
+        Stroke::new(1.0_f32, Color32::from_rgb(155, 183, 245));
     style.visuals.widgets.active.bg_fill = Color32::from_rgb(225, 235, 255);
-    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0, ACCENT);
-    style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, LINE);
+    style.visuals.widgets.active.bg_stroke = Stroke::new(1.0_f32, ACCENT);
+    style.visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, LINE);
     style.spacing.item_spacing = egui::vec2(8.0, 6.0);
     style.spacing.button_padding = egui::vec2(9.0, 6.0);
     style.spacing.interact_size.y = 28.0;
@@ -1486,7 +1487,7 @@ fn install_style(ctx: &egui::Context) {
 fn card() -> egui::Frame {
     egui::Frame::new()
         .fill(Color32::WHITE)
-        .stroke(Stroke::new(1.0, LINE))
+        .stroke(Stroke::new(1.0_f32, LINE))
         .corner_radius(12.0)
         .inner_margin(20)
 }
@@ -1499,7 +1500,7 @@ fn divider(ui: &mut egui::Ui) {
     ui.painter().hline(
         rect.x_range(),
         rect.top(),
-        Stroke::new(1.0, Color32::from_rgb(236, 239, 244)),
+        Stroke::new(1.0_f32, Color32::from_rgb(236, 239, 244)),
     );
 }
 fn choice(ui: &mut egui::Ui, text: &str, selected: bool, width: f32) -> egui::Response {
@@ -1516,7 +1517,7 @@ fn choice(ui: &mut egui::Ui, text: &str, selected: bool, width: f32) -> egui::Re
             Color32::WHITE
         })
         .stroke(Stroke::new(
-            1.0,
+            1.0_f32,
             if selected {
                 Color32::from_rgb(163, 190, 250)
             } else {
@@ -1609,7 +1610,7 @@ fn draw_icon(ui: &mut egui::Ui, icon: Icon, size: f32, color: Color32) {
     paint_icon(ui.painter(), rect.center(), icon, size, color);
 }
 fn paint_icon(p: &egui::Painter, center: egui::Pos2, icon: Icon, size: f32, color: Color32) {
-    let stroke = Stroke::new(1.3, color);
+    let stroke = Stroke::new(1.3_f32, color);
     let s = size / 16.0;
     let at = |x: f32, y: f32| center + egui::vec2(x * s, y * s);
     match icon {

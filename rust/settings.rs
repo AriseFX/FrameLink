@@ -87,7 +87,9 @@ pub fn import_ini(bytes: &[u8]) -> Result<Config, String> {
             return Err("UTF-16配置文件长度不完整".into());
         }
         let words: Vec<_> = bytes[2..]
-            .chunks_exact(2)
+            .as_chunks::<2>()
+            .0
+            .iter()
             .map(|b| u16::from_le_bytes([b[0], b[1]]))
             .collect();
         String::from_utf16(&words).map_err(|e| e.to_string())?

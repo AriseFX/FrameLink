@@ -75,7 +75,7 @@ pub fn write(path: &Path, width: u32, height: u32) -> Result<(), String> {
             clip.max.x.ceil().min(width as f32).max(0.0) as u32,
             clip.max.y.ceil().min(height as f32).max(0.0) as u32,
         ];
-        for triangle in mesh.indices.chunks_exact(3) {
+        for triangle in mesh.indices.as_chunks::<3>().0 {
             let vertices = [
                 mesh.vertices[triangle[0] as usize],
                 mesh.vertices[triangle[1] as usize],
