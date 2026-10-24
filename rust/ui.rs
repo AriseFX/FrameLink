@@ -8,6 +8,10 @@ const MUTED: Color32 = Color32::from_rgb(113, 125, 143);
 const ACCENT: Color32 = Color32::from_rgb(47, 102, 236);
 const LINE: Color32 = Color32::from_rgb(226, 231, 238);
 const CANVAS: Color32 = Color32::from_rgb(245, 247, 250);
+/// Right column height that is not the live preview image (card padding, title,
+/// region line, metric cards and the source hint). Used to shrink the preview so
+/// the column fits the window instead of scrolling the whole page.
+const PREVIEW_CHROME: f32 = 320.0;
 
 pub struct DesktopApp {
     config: Config,
@@ -231,24 +235,27 @@ impl DesktopApp {
                     .show(ui, |ui| {
                         let wide = ui.available_width() >= 800.0;
                         if wide {
+                            // Both columns fill the visible height: an oversized settings
+                            // list scrolls inside its own card, while the preview column
+                            // absorbs the difference so the page itself never scrolls.
                             ui.horizontal_top(|ui| {
                                 ui.allocate_ui_with_layout(
-                                    Vec2::new(328.0, 0.0),
+                                    Vec2::new(328.0, body_height),
                                     egui::Layout::top_down(egui::Align::Min),
-                                    |ui| self.settings_card(ui),
+                                    |ui| self.settings_card(ui, Some(body_height)),
                                 );
                                 ui.add_space(18.0);
                                 let right = ui.available_width();
                                 ui.allocate_ui_with_layout(
-                                    Vec2::new(right, 0.0),
+                                    Vec2::new(right, body_height),
                                     egui::Layout::top_down(egui::Align::Min),
-                                    |ui| self.preview_column(ui),
+                                    |ui| self.preview_column(ui, Some(body_height)),
                                 );
                             });
                         } else {
-                            self.settings_card(ui);
+                            self.settings_card(ui, None);
                             ui.add_space(18.0);
-                            self.preview_column(ui);
+                            self.preview_column(ui, None);
                         }
                     });
                 ui.add_space(16.0);
@@ -348,14 +355,22 @@ impl DesktopApp {
         });
     }
 
-    fn settings_card(&mut self, ui: &mut egui::Ui) {
+    /// `height_budget` caps the card height so a long settings list scrolls inside
+    /// the card instead of scrolling the whole window.
+    fn settings_card(&mut self, ui: &mut egui::Ui, height_budget: Option<f32>) {
         let before = toml::to_string(&self.config).unwrap_or_default();
         let running = self.engine.is_running();
         let macos_capture = self.is_macos_capture();
         let compact = self.compact || ui.ctx().content_rect().width() < 1100.0;
-        card()
-            .inner_margin(if compact { 16 } else { 20 })
-            .show(ui, |ui| {
+        let pad = if compact { 16.0 } else { 20.0 };
+        card().inner_margin(pad).show(ui, |ui| {
+            let mut area = egui::ScrollArea::vertical()
+                .id_salt("settings-scroll")
+                .auto_shrink([false, true]);
+            if let Some(budget) = height_budget {
+                area = area.max_height((budget - pad * 2.0).max(180.0));
+            }
+            area.show(ui, |ui| {
                 ui.spacing_mut().item_spacing.y = if compact { 0.0 } else { 3.0 };
                 ui.set_min_width((ui.available_width()).min(284.0));
                 ui.horizontal(|ui| {
@@ -662,6 +677,7 @@ impl DesktopApp {
                         }
                     });
             });
+        });
         if toml::to_string(&self.config).unwrap_or_default() != before {
             self.dirty_at = Some(Instant::now());
         }
@@ -778,7 +794,7 @@ impl DesktopApp {
         }
     }
 
-    fn preview_column(&mut self, ui: &mut egui::Ui) {
+    fn preview_column(&mut self, ui: &mut egui::Ui, height_budget: Option<f32>) {
         card().show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -797,10 +813,16 @@ impl DesktopApp {
                 });
             });
             ui.add_space(14.0);
-            let height = if self.compact || ui.ctx().content_rect().width() < 1100.0 {
+            let preferred = if self.compact || ui.ctx().content_rect().width() < 1100.0 {
                 200.0
             } else {
                 (ui.ctx().content_rect().height() * 0.33).clamp(230.0, 280.0)
+            };
+            // Shrink the image area rather than overflowing the column: only when the
+            // window is too short for the minimum preview does the page scroll.
+            let height = match height_budget {
+                Some(budget) => preferred.min((budget - PREVIEW_CHROME).max(150.0)),
+                None => preferred,
             };
             let (rect, _) = ui.allocate_exact_size(
                 Vec2::new(ui.available_width(), height),
