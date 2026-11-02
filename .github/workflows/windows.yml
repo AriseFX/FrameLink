@@ -1,0 +1,24 @@
+name: Windows
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-msvc
+      - name: Format
+        run: cargo fmt --all -- --check
+      - name: Unit tests
+        run: cargo test --locked --target x86_64-pc-windows-msvc --all-targets
+      - name: Clippy
+        run: cargo clippy --locked --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+      - name: Release executable
+        run: cargo build --locked --release --target x86_64-pc-windows-msvc --bin FrameLink

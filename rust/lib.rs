@@ -4,8 +4,6 @@ pub mod brand;
 pub mod capture;
 #[cfg(any(windows, test))]
 mod capture_lease;
-#[cfg(target_os = "macos")]
-pub mod capture_macos;
 pub mod diagnostics;
 pub mod engine;
 pub mod model;
@@ -19,3 +17,6 @@ pub mod single_instance;
 pub mod snapshot;
 pub mod tray;
 pub mod ui;
+
+pub mod transport;
+pub mod wire;

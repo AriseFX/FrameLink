@@ -49,22 +49,24 @@ impl Engine {
     pub fn start(&mut self, config: Config) -> Result<(), String> {
         config.validate()?;
         #[cfg(windows)]
-        crate::network::validate_selection(&config.network_adapter)?;
+        if config.transport == crate::model::Transport::Ndi {
+            crate::network::validate_selection(&config.network_adapter)?;
+        }
         self.poll();
         if self.worker.is_some() || self.is_running() {
             return Err("上一发送会话仍在结束，请稍候".into());
         }
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(windows))]
         {
             let _ = config;
-            let error = "屏幕采集和NDI发送需要Windows x64或macOS".to_string();
+            let error = "屏幕采集需要Windows x64".to_string();
             self.shared.stats(|s| {
                 s.phase = Phase::Error;
                 s.error = Some(error.clone());
             });
             Err(error)
         }
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(windows)]
         {
             self.shared.stop.store(false, Ordering::Release);
             self.shared
@@ -84,16 +86,12 @@ impl Engine {
             self.shared.running.store(true, Ordering::Release);
             let shared = self.shared.clone();
             match std::thread::Builder::new()
-                .name("ndi-latest-frame".into())
+                .name("framelink-latest-frame".into())
                 .spawn(move || {
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         #[cfg(windows)]
                         {
                             windows_worker::run(&shared, &config)
-                        }
-                        #[cfg(target_os = "macos")]
-                        {
-                            macos_worker::run(&shared, &config)
                         }
                     }));
                     let error = match result {
@@ -197,21 +195,19 @@ impl Drop for Engine {
     }
 }
 
-#[cfg(target_os = "macos")]
-mod macos_worker;
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(windows)]
 mod send_pipeline;
 
 #[cfg(windows)]
 mod windows_worker {
     use super::{
-        send_pipeline::{Measurements, Stream},
+        send_pipeline::{Measurements, Output, Stream},
         *,
     };
     use crate::{
         capture::{Capture, CaptureError, monitors},
         diagnostics::FrameTiming,
-        model::Backend,
+        model::{Backend, Transport},
         ndi::Ndi,
         pixels::{FrameBuffers, preview_bgra},
         policy::{
@@ -392,16 +388,33 @@ mod windows_worker {
     }
     pub(super) fn run(shared: &Shared, config: &Config) -> Result<(), String> {
         validate_desktop_region(config)?;
-        let ndi = Ndi::load()?;
+        let ndi = if config.transport == Transport::Ndi {
+            Some(Ndi::load()?)
+        } else {
+            None
+        };
         if shared.stop.load(Ordering::Acquire) {
             return Ok(());
         }
-        let buffers = FrameBuffers::new(config.region.width, config.region.height, config.pixel)?;
-        let sender = ndi.create_sender(&config.name)?;
-        shared.stats(|s| {
-            s.source = sender.source_name();
-            s.ndi_version = ndi.version();
-        });
+        let buffers = FrameBuffers::new(
+            config.region.width,
+            config.region.height,
+            config.capture_pixel(),
+        )?;
+        let sender = if let Some(ndi) = &ndi {
+            let sender = ndi.create_sender(&config.name)?;
+            shared.stats(|s| {
+                s.source = sender.source_name();
+                s.ndi_version = ndi.version();
+            });
+            Output::Ndi(sender)
+        } else {
+            let sender = crate::transport::SocketSender::connect(config)?;
+            shared.stats(|s| {
+                s.source = format!("{}://{}", config.transport.label(), config.destination);
+            });
+            Output::Jpeg(Box::new(sender))
+        };
         let mut stream = Stream::new(sender, buffers, config);
         let pacer = Pacer::new(config.precision)?;
         let mut capture = Capturer::new(config, shared)?;
@@ -431,7 +444,7 @@ mod windows_worker {
                 capture.dxgi(config, shared)?;
             }
             if capture.capture.is_none() {
-                let receivers = stream.sender.connections();
+                let receivers = stream.connections();
                 shared.stats(|s| {
                     s.fps = 0.0;
                     s.updates_fps = 0.0;
@@ -475,19 +488,29 @@ mod windows_worker {
                         result
                     })?;
                     result.map_err(CaptureError::Fatal)?;
+                    if config.transport != Transport::Ndi {
+                        // Release the mapped GPU surface before CPU JPEG work.
+                        stream.encode(plan.slot).map_err(CaptureError::Fatal)?;
+                        converted = Instant::now();
+                    }
                 }
                 let desktop_age_before_submit_ms = config
                     .diagnostics
                     .then(|| current.source_age_ms())
                     .flatten();
                 let submit_started = config.diagnostics.then(Instant::now);
-                stream.submit(plan.slot, current.nominal_fps());
+                let sent = stream
+                    .submit(plan.slot, current.nominal_fps(), &shared.stop)
+                    .map_err(CaptureError::Fatal)?;
+                slots.submitted(plan.slot);
+                if !sent {
+                    return Ok(());
+                }
                 let submitted = Instant::now();
                 let desktop_age_after_submit_ms = config
                     .diagnostics
                     .then(|| current.source_age_ms())
                     .flatten();
-                slots.submitted(plan.slot);
                 frames += 1;
                 window_frames += 1;
                 if plan.refresh {
@@ -562,13 +585,14 @@ mod windows_worker {
             if now.duration_since(last_stats) >= Duration::from_millis(500) {
                 let elapsed = now.duration_since(last_stats).as_secs_f64();
                 let n = measurements.count.max(1) as f64;
-                let receivers = stream.sender.connections();
+                let receivers = stream.connections();
                 shared.stats(|s| {
                     s.fps = window_frames as f64 / elapsed;
                     s.updates_fps = window_updates as f64 / elapsed;
                     s.receivers = receivers;
                     s.frames = frames;
                     s.repeats = repeats;
+                    s.dropped = stream.dropped();
                     s.capture_ms = measurements.capture / n;
                     s.conversion_ms = measurements.conversion / n;
                     s.submit_ms = measurements.submit / n;
@@ -592,6 +616,7 @@ mod windows_worker {
             s.phase = Phase::Stopping;
             s.frames = frames;
             s.repeats = repeats;
+            s.dropped = stream.dropped();
             s.uptime_sec = started.elapsed().as_secs_f64();
             if config.diagnostics && !timings.is_empty() {
                 s.timings.clone_from(&timings);
@@ -654,7 +679,7 @@ mod tests {
         assert!(!engine.is_running());
     }
     #[test]
-    #[cfg(not(any(windows, target_os = "macos")))]
+    #[cfg(not(windows))]
     fn unsupported_platform_cannot_claim_to_send_a_stream() {
         let mut engine = Engine::new();
         assert!(

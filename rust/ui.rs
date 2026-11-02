@@ -11,7 +11,7 @@ const CANVAS: Color32 = Color32::from_rgb(245, 247, 250);
 /// Right column height that is not the live preview image (card padding, title,
 /// region line, metric cards and the source hint). Used to shrink the preview so
 /// the column fits the window instead of scrolling the whole page.
-const PREVIEW_CHROME: f32 = 320.0;
+const PREVIEW_CHROME: f32 = 336.0;
 
 pub struct DesktopApp {
     config: Config,
@@ -50,18 +50,29 @@ impl DesktopApp {
         Self::initialize(ctx, true, compact)
     }
 
+    pub(crate) fn for_snapshot_transport(
+        ctx: &egui::Context,
+        compact: bool,
+        transport: Transport,
+    ) -> Self {
+        let mut app = Self::for_snapshot(ctx, compact);
+        app.config.transport = transport;
+        if transport != Transport::Ndi {
+            app.config.destination = "192.168.1.20:7878".into();
+        }
+        app
+    }
+
     fn initialize(ctx: &egui::Context, snapshot: bool, compact: bool) -> Self {
         install_style(ctx);
         let (mut config, warning) = crate::settings::load();
         let mut error = warning;
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(windows)]
         let mut monitors = if snapshot {
             Vec::new()
         } else {
             #[cfg(windows)]
             let result = crate::capture::monitors();
-            #[cfg(target_os = "macos")]
-            let result = crate::capture_macos::monitors();
             match result {
                 Ok(monitors) => monitors,
                 Err(e) => {
@@ -70,14 +81,8 @@ impl DesktopApp {
                 }
             }
         };
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(windows))]
         let mut monitors: Vec<Monitor> = Vec::new();
-        if cfg!(target_os = "macos") && !snapshot {
-            config.backend = Backend::Auto;
-            config.unlimited = false;
-            config.precision = false;
-            config.close_to_tray = false;
-        }
         if snapshot {
             config = Config::default();
             error = None;
@@ -134,7 +139,7 @@ impl DesktopApp {
             (Vec::new(), None)
         };
         #[cfg(windows)]
-        if !snapshot {
+        if !snapshot && config.transport == Transport::Ndi {
             error = error.or_else(crate::network::startup_error);
         }
         Self {
@@ -298,11 +303,22 @@ impl DesktopApp {
                         .corner_radius(20.0)
                         .inner_margin(egui::Margin::symmetric(9, 4))
                         .show(ui, |ui| {
-                            ui.hyperlink_to(
-                                RichText::new("NDI®").size(10.5).color(MUTED),
-                                "https://ndi.video/",
-                            )
-                            .on_hover_text("NDI® is a registered trademark of Vizrt NDI AB");
+                            if self.config.transport == Transport::Ndi {
+                                ui.hyperlink_to(
+                                    RichText::new("NDI®").size(10.5).color(MUTED),
+                                    "https://ndi.video/",
+                                )
+                                .on_hover_text("NDI® is a registered trademark of Vizrt NDI AB");
+                            } else {
+                                ui.label(
+                                    RichText::new(format!(
+                                        "{} · JPEG",
+                                        self.config.transport.label()
+                                    ))
+                                    .size(10.5)
+                                    .color(MUTED),
+                                );
+                            }
                         });
                 });
                 ui.label(
@@ -360,7 +376,6 @@ impl DesktopApp {
     fn settings_card(&mut self, ui: &mut egui::Ui, height_budget: Option<f32>) {
         let before = toml::to_string(&self.config).unwrap_or_default();
         let running = self.engine.is_running();
-        let macos_capture = self.is_macos_capture();
         let compact = self.compact || ui.ctx().content_rect().width() < 1100.0;
         let pad = if compact { 16.0 } else { 20.0 };
         card().inner_margin(pad).show(ui, |ui| {
@@ -417,20 +432,65 @@ impl DesktopApp {
                         );
                     }
                     ui.add_space(14.0);
-                    field_label(ui, "NDI 源名称");
-                    ui.horizontal(|ui| {
-                        let width = (ui.available_width() - 38.0).max(80.0);
-                        ui.add_sized(
-                            [width, 32.0],
-                            egui::TextEdit::singleline(&mut self.config.name)
-                                .hint_text("接收端显示的名称")
-                                .margin(egui::vec2(9.0, 7.0)),
+                    field_label(ui, "传输协议");
+                    egui::ComboBox::from_id_salt("transport")
+                        .selected_text(self.config.transport.label())
+                        .show_ui(ui, |ui| {
+                            for transport in [Transport::Ndi, Transport::Tcp, Transport::Udp] {
+                                ui.selectable_value(
+                                    &mut self.config.transport,
+                                    transport,
+                                    transport.label(),
+                                );
+                            }
+                        });
+                    if self.config.transport != Transport::Ndi {
+                        field_label(ui, "接收端 IP:端口");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.config.destination)
+                                .hint_text("192.168.1.20:7878"),
                         );
-                        if icon_button(ui, Icon::Copy, "复制源名称").clicked() {
-                            ui.ctx().copy_text(self.config.name.clone());
-                            self.notice("源名称已复制");
-                        }
-                    });
+                        ui.horizontal(|ui| {
+                            ui.label("发送超时");
+                            ui.add(
+                                egui::DragValue::new(&mut self.config.send_timeout_ms)
+                                    .range(1..=1000)
+                                    .suffix(" ms"),
+                            );
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("JPEG 质量");
+                            ui.add(
+                                egui::DragValue::new(&mut self.config.jpeg_quality).range(1..=100),
+                            );
+                        });
+                        ui.label(
+                            RichText::new(if self.config.transport == Transport::Tcp {
+                                "霜雪手机端选 TCP；填手机 IP 和监听端口。"
+                            } else {
+                                "霜雪手机端选 UDP；单张 JPEG 需 ≤ 65507 字节。"
+                            })
+                            .size(11.0)
+                            .color(MUTED),
+                        );
+                    }
+                    ui.add_space(8.0);
+                    if self.config.transport == Transport::Ndi {
+                        field_label(ui, "源名称（NDI）");
+                        ui.horizontal(|ui| {
+                            let width = (ui.available_width() - 38.0).max(80.0);
+                            ui.add_sized(
+                                [width, 32.0],
+                                egui::TextEdit::singleline(&mut self.config.name)
+                                    .hint_text("接收端显示的名称")
+                                    .margin(egui::vec2(9.0, 7.0)),
+                            );
+                            if icon_button(ui, Icon::Copy, "复制源名称").clicked() {
+                                ui.ctx().copy_text(self.config.name.clone());
+                                self.notice("源名称已复制");
+                            }
+                        });
+                    }
                     ui.add_space(if compact { 12.0 } else { 17.0 });
                     divider(ui);
                     ui.add_space(14.0);
@@ -583,22 +643,17 @@ impl DesktopApp {
                                 .speed(1.0)
                                 .suffix(" fps"),
                         );
-                        if !macos_capture {
-                            ui.add_space(15.0);
-                            ui.checkbox(
-                                &mut self.config.unlimited,
-                                RichText::new("跟随刷新率").size(12.0),
-                            )
-                            .on_hover_text(
-                                "不使用上方帧率：屏幕每更新一次就发一帧，不补帧、不重复。",
-                            );
-                        }
+
+                        ui.add_space(15.0);
+                        ui.checkbox(
+                            &mut self.config.unlimited,
+                            RichText::new("跟随刷新率").size(12.0),
+                        )
+                        .on_hover_text("不使用上方帧率：屏幕每更新一次就发一帧，不补帧、不重复。");
                     });
                     ui.add_space(5.0);
                     ui.label(
-                        RichText::new(if macos_capture {
-                            "帧率上限，实际采集取决于屏幕更新"
-                        } else if self.config.unlimited {
+                        RichText::new(if self.config.unlimited {
                             "跟随屏幕更新：画面变化多少就发多少"
                         } else {
                             "固定帧率：高于屏幕更新会产生重复帧"
@@ -607,12 +662,20 @@ impl DesktopApp {
                         .color(MUTED),
                     );
                 });
-                if !macos_capture {
-                    ui.add_space(12.0);
-                    divider(ui);
-                    ui.add_space(10.0);
+
+                ui.add_space(12.0);
+                divider(ui);
+                ui.add_space(10.0);
+                if self.config.transport == Transport::Ndi {
                     ui.add_enabled_ui(!running && !self.exiting, |ui| self.network_controls(ui));
+                } else {
+                    ui.label(
+                        RichText::new("TCP / UDP 使用系统路由选择发送网卡")
+                            .size(11.0)
+                            .color(MUTED),
+                    );
                 }
+
                 ui.add_space(13.0);
                 divider(ui);
                 ui.add_space(5.0);
@@ -625,61 +688,61 @@ impl DesktopApp {
                                 .spacing([12.0, 9.0])
                                 .show(ui, |ui| {
                                     ui.label("采集方式");
-                                    if macos_capture {
-                                        ui.label("ScreenCaptureKit");
-                                    } else {
-                                        egui::ComboBox::from_id_salt("backend")
-                                            .width(145.0)
-                                            .selected_text(backend_name(self.config.backend))
-                                            .show_ui(ui, |ui| {
-                                                ui.selectable_value(
-                                                    &mut self.config.backend,
-                                                    Backend::Auto,
-                                                    "自动选择（推荐）",
-                                                );
-                                                ui.selectable_value(
-                                                    &mut self.config.backend,
-                                                    Backend::Dxgi,
-                                                    "DXGI 高速采集",
-                                                );
-                                                ui.selectable_value(
-                                                    &mut self.config.backend,
-                                                    Backend::Gdi,
-                                                    "GDI 兼容采集",
-                                                );
-                                            });
-                                    }
-                                    ui.end_row();
-                                    ui.label("视频格式");
-                                    egui::ComboBox::from_id_salt("pixel")
+
+                                    egui::ComboBox::from_id_salt("backend")
                                         .width(145.0)
-                                        .selected_text(pixel_name(self.config.pixel))
+                                        .selected_text(backend_name(self.config.backend))
                                         .show_ui(ui, |ui| {
                                             ui.selectable_value(
-                                                &mut self.config.pixel,
-                                                PixelFormat::Nv12,
-                                                "NV12（推荐）",
+                                                &mut self.config.backend,
+                                                Backend::Auto,
+                                                "自动选择（推荐）",
                                             );
                                             ui.selectable_value(
-                                                &mut self.config.pixel,
-                                                PixelFormat::Bgrx,
-                                                "BGRX",
+                                                &mut self.config.backend,
+                                                Backend::Dxgi,
+                                                "DXGI 高速采集",
+                                            );
+                                            ui.selectable_value(
+                                                &mut self.config.backend,
+                                                Backend::Gdi,
+                                                "GDI 兼容采集",
                                             );
                                         });
+
+                                    ui.end_row();
+                                    ui.label("视频格式");
+                                    if self.config.transport == Transport::Ndi {
+                                        egui::ComboBox::from_id_salt("pixel")
+                                            .width(145.0)
+                                            .selected_text(pixel_name(self.config.pixel))
+                                            .show_ui(ui, |ui| {
+                                                ui.selectable_value(
+                                                    &mut self.config.pixel,
+                                                    PixelFormat::Nv12,
+                                                    "NV12（推荐）",
+                                                );
+                                                ui.selectable_value(
+                                                    &mut self.config.pixel,
+                                                    PixelFormat::Bgrx,
+                                                    "BGRX",
+                                                );
+                                            });
+                                    } else {
+                                        ui.label("JPEG 4:2:0（霜雪手机端）");
+                                    }
                                     ui.end_row();
                                 });
                             ui.add_space(8.0);
                             ui.checkbox(&mut self.config.cursor, "包含鼠标指针");
-                            if !macos_capture {
-                                ui.checkbox(&mut self.config.precision, "精确帧间调度")
-                                    .on_hover_text(
-                                        "提高调度精度，但会增加 CPU 占用。建议先使用默认设置。",
-                                    );
-                            }
+
+                            ui.checkbox(&mut self.config.precision, "精确帧间调度")
+                                .on_hover_text(
+                                    "提高调度精度，但会增加 CPU 占用。建议先使用默认设置。",
+                                );
                         });
-                        if !macos_capture {
-                            ui.checkbox(&mut self.config.close_to_tray, "关闭窗口时收起到托盘");
-                        }
+
+                        ui.checkbox(&mut self.config.close_to_tray, "关闭窗口时收起到托盘");
                     });
             });
         });
@@ -825,8 +888,14 @@ impl DesktopApp {
             };
             // Shrink the image area rather than overflowing the column: only when the
             // window is too short for the minimum preview does the page scroll.
+            let chrome = PREVIEW_CHROME
+                + if self.config.transport == Transport::Udp {
+                    28.0
+                } else {
+                    0.0
+                };
             let height = match height_budget {
-                Some(budget) => preferred.min((budget - PREVIEW_CHROME).max(150.0)),
+                Some(budget) => preferred.min((budget - chrome).max(150.0)),
                 None => preferred,
             };
             let (rect, _) = ui.allocate_exact_size(
@@ -908,14 +977,18 @@ impl DesktopApp {
                 ui,
                 width,
                 "接收设备",
-                if active {
-                    self.stats.receivers.max(0).to_string()
+                if active && self.stats.receivers >= 0 {
+                    self.stats.receivers.to_string()
                 } else {
                     "—".into()
                 },
                 "台",
-                "NDI 已连接的接收端",
-                None,
+                match self.config.transport {
+                    Transport::Ndi => "NDI 已连接接收端",
+                    Transport::Tcp => "已建立的 TCP 连接",
+                    Transport::Udp => "接收状态未知",
+                },
+                Some("NDI 显示 SDK 连接数。TCP 连接不代表手机已解码或推理；UDP 没有接收确认，无法判断手机是否在线。"),
             );
             let cost = self.stats.capture_ms + self.stats.conversion_ms + self.stats.submit_ms;
             metric(
@@ -928,9 +1001,9 @@ impl DesktopApp {
                     "—".into()
                 },
                 "ms",
-                "不含等待与网络",
+                "含提交等待，非端到端",
                 Some(
-                    "采集拷贝、颜色转换与 NDI 提交的合计耗时，不含等待桌面新帧的空闲时间、网络与接收端。此数值不是端到端延迟。",
+                    "采集拷贝、颜色转换 / JPEG 编码与发送提交的合计耗时，可能包含网络背压等待；不含接收端处理，不是端到端延迟。",
                 ),
             );
             metric(
@@ -950,6 +1023,16 @@ impl DesktopApp {
             );
         });
         ui.add_space(15.0);
+        if self.config.transport == Transport::Udp {
+            ui.label(
+                RichText::new(format!(
+                    "本机放弃发送 {} 帧 · 不含网络丢包，接收状态未知",
+                    self.stats.dropped
+                ))
+                .size(11.0)
+                .color(MUTED),
+            );
+        }
         let source_hint = egui::Frame::new()
             .fill(Color32::from_rgb(235, 241, 254))
             .corner_radius(9.0)
@@ -969,10 +1052,15 @@ impl DesktopApp {
                         );
                         ui.add_space(3.0);
                         ui.label(
-                            RichText::new(format!(
-                                "在同一局域网内，选择源「{}」 · 点击复制",
-                                self.config.name
-                            ))
+                            RichText::new(if self.config.transport == Transport::Ndi {
+                                format!("在同一局域网内，选择源「{}」 · 点击复制", self.config.name)
+                            } else {
+                                format!(
+                                    "{} → {} · 霜雪手机端网络接收",
+                                    self.config.transport.label(),
+                                    self.config.destination
+                                )
+                            })
                             .size(11.0)
                             .color(MUTED),
                         );
@@ -982,11 +1070,16 @@ impl DesktopApp {
             .response;
         if source_hint
             .interact(egui::Sense::click())
-            .on_hover_text("复制 NDI 源名称")
+            .on_hover_text("复制源名称或目标地址")
             .clicked()
         {
-            ui.ctx().copy_text(self.config.name.clone());
-            self.notice("源名称已复制");
+            ui.ctx()
+                .copy_text(if self.config.transport == Transport::Ndi {
+                    self.config.name.clone()
+                } else {
+                    self.config.destination.clone()
+                });
+            self.notice("已复制");
         }
     }
 
@@ -1162,7 +1255,7 @@ impl DesktopApp {
                 ui.add_space(12.0);
                 ui.label(RichText::new(message).size(11.0).color(MUTED));
             }
-            if !self.is_macos_capture() && ui.available_width() > 140.0 {
+            if ui.available_width() > 140.0 {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui
                         .add_enabled(
@@ -1192,9 +1285,6 @@ impl DesktopApp {
             .iter()
             .find(|m| m.id == self.config.monitor)
             .or(self.monitors.first())
-    }
-    fn is_macos_capture(&self) -> bool {
-        cfg!(target_os = "macos") && !self.snapshot
     }
     fn apply_preset(&mut self, size: u32) {
         if let Some(monitor) = self.selected_monitor() {
@@ -1228,23 +1318,6 @@ impl DesktopApp {
         self.dismissed_worker_error = None;
         if let Err(error) = self.config.validate() {
             self.error = Some(error);
-            return;
-        }
-        if self.is_macos_capture() {
-            let Some(monitor) = self.selected_monitor() else {
-                self.error = Some("没有可用的显示器，请检查显示器连接后重新打开程序。".into());
-                return;
-            };
-            if !self.config.region.fits(monitor) {
-                self.error = Some("采集区域需位于所选显示器内。".into());
-                return;
-            }
-        }
-        #[cfg(target_os = "macos")]
-        if !crate::capture_macos::has_permission() && !crate::capture_macos::request_permission() {
-            self.error = Some(
-                "请在系统设置 → 隐私与安全性 → 屏幕与系统音频录制中允许 FrameLink，授权后退出并重新打开程序。".into(),
-            );
             return;
         }
         if self.config.backend == Backend::Dxgi

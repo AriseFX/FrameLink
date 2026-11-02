@@ -1,6 +1,6 @@
 use crate::model::{PixelFormat, Preview};
 
-#[cfg(any(windows, target_os = "macos"))]
+#[cfg(windows)]
 unsafe extern "C" {
     fn ARGBToNV12Matrix(
         src: *const u8,
@@ -92,6 +92,9 @@ impl FrameBuffers {
             pixels: [alloc()?, alloc()?],
         })
     }
+    pub fn bytes(&self, slot: usize) -> &[u8] {
+        &self.pixels[slot]
+    }
     pub fn data(&self, slot: usize) -> *const u8 {
         self.pixels[slot].as_ptr()
     }
@@ -107,7 +110,7 @@ impl FrameBuffers {
                 Ok(())
             }
             PixelFormat::Nv12 => {
-                #[cfg(any(windows, target_os = "macos"))]
+                #[cfg(windows)]
                 {
                     // DXGI and GDI expose BGRA byte order. libyuv's ARGB name
                     // describes little-endian words, so ARGBToNV12 is correct.
@@ -136,7 +139,7 @@ impl FrameBuffers {
                         Err("libyuv NV12转换失败".into())
                     }
                 }
-                #[cfg(not(any(windows, target_os = "macos")))]
+                #[cfg(not(windows))]
                 {
                     Err("当前平台不支持NV12转换".into())
                 }
@@ -215,7 +218,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(any(windows, target_os = "macos"))]
+    #[cfg(windows)]
     fn nv12_black_white_and_padded_rows_match_with_stable_buffers() {
         // The production crop sizes exercise SIMD rows and both NDI matrices.
         // Neutral black/white have the same limited-range reference values in

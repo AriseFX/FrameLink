@@ -339,6 +339,7 @@ mod windows_sender {
         ndi_version: String,
         frames: u64,
         repeats: u64,
+        dropped: u64,
         receiver_observed: bool,
         maximum_observed_receivers: i32,
         receiver_observations: Vec<ReceiverObservation>,
@@ -447,12 +448,15 @@ mod windows_sender {
             "All frame counts and traces cover this sender session, including frames sent before the first active sender status was observed and during shutdown.",
             "Desktop age uses the local Windows QPC clock and DXGI LastPresentTime. It describes desktop presentation age, not ROI content age or end-to-end latency.",
             "Desktop age percentiles include only desktop_updated samples with a known age. Static-desktop repeats and pointer-only updates are excluded from those percentiles.",
-            "NDI submit duration may include waiting for the previous asynchronous send; it does not prove receiver delivery or decoding time.",
+            "The legacy ndi_submit_ms field measures the selected transport submission, including possible backpressure. It does not prove receiver delivery or decoding time.",
             "Diagnostic tracing adds timing and status collection overhead. Compare runs with the same diagnostics mode and configuration.",
         ];
+        if config.transport != crate::model::Transport::Ndi {
+            notes.push("TCP/UDP uses the supplied Shuangxue APK JPEG protocol. conversion_ms includes JPEG encoding for changed frames. TCP connection count is not a delivery acknowledgement; UDP reports -1 (unknown). dropped counts only local abandoned UDP frames, not network loss.");
+        }
         if !receiver_observed {
             notes.push(
-                "No NDI receiver was observed. This run cannot be used as a transmission test.",
+                "No receiver connection was observed (UDP has no acknowledgement). Confirm delivery separately at the receiver.",
             );
         }
         if trace.missing_diagnostic_samples > 0 {
@@ -491,6 +495,7 @@ mod windows_sender {
             ndi_version: stats.ndi_version,
             frames: stats.frames,
             repeats: stats.repeats,
+            dropped: stats.dropped,
             receiver_observed,
             maximum_observed_receivers,
             receiver_observations,

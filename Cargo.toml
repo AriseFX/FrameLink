@@ -4,7 +4,7 @@ version = "3.1.2-dev"
 edition = "2024"
 rust-version = "1.88"
 build = "rust/build.rs"
-description = "FrameLink: low-latency screen streaming for remote analysis"
+description = "FrameLink: Windows x64 screen streaming over NDI, TCP and UDP"
 
 [lib]
 path = "rust/lib.rs"
@@ -20,14 +20,14 @@ serde_json = "1"
 toml = "0.9"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 raw-window-handle = "0.6"
+jpeg-encoder = { version = "=0.7.1", features = ["simd"] }
+socket2 = "0.6"
 
-[target.'cfg(any(windows, target_os = "macos"))'.dependencies]
-libloading = "0.8"
-
-[target.'cfg(target_os = "macos")'.dependencies]
-screencapturekit = { version = "=11.0.0", default-features = false }
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 [target.'cfg(windows)'.dependencies]
+libloading = "0.8"
 tray-icon = { version = "=0.21.3", default-features = false }
 windows = { version = "=0.62.2", features = [
   "Win32_Foundation", "Win32_Graphics_Direct3D", "Win32_Graphics_Direct3D11",

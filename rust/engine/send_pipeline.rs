@@ -8,13 +8,17 @@ use crate::{
 /// Field drop order is part of the ownership contract: the sender flushes and
 /// is destroyed before either pixel storage or descriptors can be released.
 pub(super) struct Stream<'a> {
-    pub(super) sender: Sender<'a>,
+    sender: Output<'a>,
     pub(super) buffers: FrameBuffers,
     descriptors: Box<[VideoFrame; 2]>,
     descriptor: usize,
 }
+pub(super) enum Output<'a> {
+    Ndi(Sender<'a>),
+    Jpeg(Box<crate::transport::SocketSender>),
+}
 impl<'a> Stream<'a> {
-    pub(super) fn new(sender: Sender<'a>, buffers: FrameBuffers, config: &Config) -> Self {
+    pub(super) fn new(sender: Output<'a>, buffers: FrameBuffers, config: &Config) -> Self {
         let frame = VideoFrame {
             width: config.region.width as i32,
             height: config.region.height as i32,
@@ -45,7 +49,34 @@ impl<'a> Stream<'a> {
             descriptor: 0,
         }
     }
-    pub(super) fn submit(&mut self, slot: usize, rate: u32) {
+    pub(super) fn encode(&mut self, slot: usize) -> Result<(), String> {
+        if let Output::Jpeg(sender) = &mut self.sender {
+            sender.encode(self.buffers.bytes(slot))?;
+        }
+        Ok(())
+    }
+    pub(super) fn connections(&self) -> i32 {
+        match &self.sender {
+            Output::Ndi(sender) => sender.connections(),
+            Output::Jpeg(sender) => sender.connections(),
+        }
+    }
+    pub(super) fn dropped(&self) -> u64 {
+        match &self.sender {
+            Output::Ndi(_) => 0,
+            Output::Jpeg(sender) => sender.dropped,
+        }
+    }
+    pub(super) fn submit(
+        &mut self,
+        slot: usize,
+        rate: u32,
+        stop: &std::sync::atomic::AtomicBool,
+    ) -> Result<bool, String> {
+        let sender = match &mut self.sender {
+            Output::Jpeg(sender) => return sender.submit(stop),
+            Output::Ndi(sender) => sender,
+        };
         self.descriptor ^= 1;
         let frame = &mut self.descriptors[self.descriptor];
         frame.data = self.buffers.data(slot);
@@ -53,7 +84,8 @@ impl<'a> Stream<'a> {
         frame.timecode = timecode();
         // The descriptor alternates even for repeated pixels, so its
         // timecode is never changed while NDI can still be reading it.
-        unsafe { self.sender.submit(frame) };
+        unsafe { sender.submit(frame) };
+        Ok(true)
     }
 }
 
@@ -73,12 +105,5 @@ fn timecode() -> i64 {
             unsafe { windows::Win32::System::SystemInformation::GetSystemTimePreciseAsFileTime() };
         let ticks = (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
         ticks.saturating_sub(116_444_736_000_000_000) as i64
-    }
-    #[cfg(target_os = "macos")]
-    {
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|elapsed| (elapsed.as_nanos() / 100).min(i64::MAX as u128) as i64)
-            .unwrap_or(0)
     }
 }

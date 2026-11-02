@@ -13,12 +13,41 @@ struct Texture {
     pixels: Vec<Color32>,
 }
 
+/// Generate all protocol views from the real widgets with example settings.
+pub fn write_gallery(folder: &Path) -> Result<(), String> {
+    use crate::model::Transport;
+    for (transport, prefix) in [
+        (Transport::Ndi, "desktop"),
+        (Transport::Tcp, "desktop-tcp"),
+        (Transport::Udp, "desktop-udp"),
+    ] {
+        for (width, height) in [(1200, 820), (960, 740)] {
+            write_transport(
+                &folder.join(format!("{prefix}-{width}.png")),
+                width,
+                height,
+                transport,
+            )?;
+        }
+    }
+    Ok(())
+}
+
 pub fn write(path: &Path, width: u32, height: u32) -> Result<(), String> {
+    write_transport(path, width, height, crate::model::Transport::Ndi)
+}
+
+pub fn write_transport(
+    path: &Path,
+    width: u32,
+    height: u32,
+    transport: crate::model::Transport,
+) -> Result<(), String> {
     if !(640..=2400).contains(&width) || !(480..=1800).contains(&height) {
         return Err("界面快照尺寸超出范围".into());
     }
     let ctx = egui::Context::default();
-    let mut app = crate::ui::DesktopApp::for_snapshot(&ctx, width < 1100);
+    let mut app = crate::ui::DesktopApp::for_snapshot_transport(&ctx, width < 1100, transport);
     let mut textures = HashMap::new();
     let mut final_output = None;
     for frame in 0..16 {

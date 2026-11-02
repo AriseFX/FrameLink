@@ -1,0 +1,75 @@
+{
+  "date": "2026-11-02",
+  "profile": "release",
+  "host_os": "Darwin",
+  "host_arch": "arm64",
+  "jpeg_quality": 75,
+  "sampling": "4:2:0",
+  "workload": "Deterministic changing texture; see examples/transport_bench.rs",
+  "excluded": [
+    "screen capture",
+    "BGRA capture copy",
+    "physical NIC",
+    "Android JPEG decoding",
+    "inference",
+    "end-to-end latency"
+  ],
+  "results": [
+    {
+      "encode_and_submit_p95_ms": 2.4671250000000002,
+      "error": null,
+      "received": 721,
+      "received_fps": 240.1318260711342,
+      "requested_fps": 240,
+      "scope": "synthetic_localhost_jpeg_encode_no_capture_or_decode",
+      "seconds": 3.002517458,
+      "sender_dropped": 0,
+      "sent": 721,
+      "sent_jpeg_mbps": 66.67023749242094,
+      "size": 512,
+      "transport": "Tcp"
+    },
+    {
+      "encode_and_submit_p95_ms": 2.6632499999999997,
+      "error": null,
+      "received": 721,
+      "received_fps": 240.09713441599172,
+      "requested_fps": 240,
+      "scope": "synthetic_localhost_jpeg_encode_no_capture_or_decode",
+      "seconds": 3.002951292,
+      "sender_dropped": 0,
+      "sent": 721,
+      "sent_jpeg_mbps": 66.66060569589817,
+      "size": 512,
+      "transport": "Udp"
+    },
+    {
+      "encode_and_submit_p95_ms": 2.686167,
+      "error": null,
+      "received": 721,
+      "received_fps": 240.0834297710344,
+      "requested_fps": 240,
+      "scope": "synthetic_localhost_jpeg_encode_no_capture_or_decode",
+      "seconds": 3.003122709,
+      "sender_dropped": 0,
+      "sent": 721,
+      "sent_jpeg_mbps": 103.24464167607879,
+      "size": 640,
+      "transport": "Tcp"
+    },
+    {
+      "encode_and_submit_p95_ms": 2.911125,
+      "error": null,
+      "received": 719,
+      "received_fps": 239.4472763721368,
+      "requested_fps": 240,
+      "scope": "synthetic_localhost_jpeg_encode_no_capture_or_decode",
+      "seconds": 3.002748709,
+      "sender_dropped": 0,
+      "sent": 719,
+      "sent_jpeg_mbps": 102.97109680648938,
+      "size": 640,
+      "transport": "Udp"
+    }
+  ]
+}

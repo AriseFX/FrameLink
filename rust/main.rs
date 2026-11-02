@@ -1,4 +1,8 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+#[cfg(all(not(windows), not(test)))]
+compile_error!(
+    "FrameLink is a Windows x64 application. Build with --target x86_64-pc-windows-msvc or x86_64-pc-windows-gnu; host-only checks use cargo test --lib."
+);
 use framelink::{brand::APP_NAME, snapshot, ui::DesktopApp};
 
 fn main() {
@@ -46,7 +50,7 @@ fn run() -> Result<(), String> {
         if args.len() != 1 {
             return Err("用法：FrameLink --check-ndi".into());
         }
-        #[cfg(any(windows, target_os = "macos"))]
+        #[cfg(windows)]
         {
             #[cfg(windows)]
             let _instance = framelink::single_instance::PrimaryInstance::acquire()?
@@ -68,7 +72,7 @@ fn run() -> Result<(), String> {
             );
             return Ok(());
         }
-        #[cfg(not(any(windows, target_os = "macos")))]
+        #[cfg(not(windows))]
         return Err("当前平台不支持NDI运行库检查".into());
     }
     if args
@@ -86,8 +90,7 @@ fn run() -> Result<(), String> {
     }
     if args.first().is_some_and(|v| v == "--ui-snapshot") {
         let folder = std::path::PathBuf::from(args.get(1).map(String::as_str).unwrap_or("docs/ui"));
-        snapshot::write(&folder.join("desktop-1200.png"), 1200, 820)?;
-        snapshot::write(&folder.join("desktop-960.png"), 960, 740)?;
+        snapshot::write_gallery(&folder)?;
         println!("UI snapshots: {}", folder.display());
         return Ok(());
     }

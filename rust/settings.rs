@@ -199,6 +199,58 @@ mod tests {
         assert!(parse("fps = 240").unwrap().network_adapter.is_empty());
     }
     #[test]
+    fn transport_settings_round_trip_and_legacy_default() {
+        use crate::model::Transport;
+        assert_eq!(parse("fps = 240").unwrap().transport, Transport::Ndi);
+        for transport in [Transport::Tcp, Transport::Udp] {
+            let config = Config {
+                transport,
+                destination: "[::1]:5960".into(),
+                send_timeout_ms: 42,
+                jpeg_quality: 80,
+                ..Config::default()
+            };
+            let restored = parse(&toml::to_string(&config).unwrap()).unwrap();
+            assert_eq!(restored.transport, transport);
+            assert_eq!(restored.destination, config.destination);
+            assert_eq!(restored.send_timeout_ms, 42);
+            assert_eq!(restored.jpeg_quality, 80);
+            assert!(
+                Config {
+                    jpeg_quality: 0,
+                    ..config.clone()
+                }
+                .validate()
+                .is_err()
+            );
+            assert_eq!(config.capture_pixel(), crate::model::PixelFormat::Bgrx);
+            for destination in [
+                "bad:5960",
+                "127.0.0.1:0",
+                "0.0.0.0:5960",
+                "224.0.0.1:5960",
+                "255.255.255.255:5960",
+            ] {
+                assert!(
+                    Config {
+                        destination: destination.into(),
+                        ..config.clone()
+                    }
+                    .validate()
+                    .is_err()
+                );
+            }
+            assert!(
+                Config {
+                    send_timeout_ms: 0,
+                    ..config
+                }
+                .validate()
+                .is_err()
+            );
+        }
+    }
+    #[test]
     fn custom_region_does_not_become_a_center_preset_on_restart() {
         let mut c = Config {
             preset: None,

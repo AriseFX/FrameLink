@@ -13,6 +13,22 @@ pub enum PixelFormat {
     Nv12,
     Bgrx,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Transport {
+    #[default]
+    Ndi,
+    Tcp,
+    Udp,
+}
+impl Transport {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Ndi => "NDI",
+            Self::Tcp => "TCP",
+            Self::Udp => "UDP",
+        }
+    }
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Region {
     pub x: i32,
@@ -56,6 +72,11 @@ pub struct Monitor {
 #[serde(default)]
 pub struct Config {
     pub name: String,
+    pub transport: Transport,
+    /// Literal IP:port; no DNS lookup on the capture thread.
+    pub destination: String,
+    pub send_timeout_ms: u32,
+    pub jpeg_quality: u8,
     pub monitor: String,
     /// Empty follows existing NDI settings; otherwise a stable Windows adapter ID.
     pub network_adapter: String,
@@ -77,6 +98,10 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             name: crate::brand::APP_ID.into(),
+            transport: Transport::Ndi,
+            destination: "127.0.0.1:7878".into(),
+            send_timeout_ms: 20,
+            jpeg_quality: 75,
             monitor: String::new(),
             network_adapter: String::new(),
             region: Region {
@@ -100,6 +125,26 @@ impl Default for Config {
 }
 impl Config {
     pub fn validate(&self) -> Result<(), String> {
+        if self.transport != Transport::Ndi {
+            let address: std::net::SocketAddr = self
+                .destination
+                .trim()
+                .parse()
+                .map_err(|_| "目标地址需为 IP:端口，例如 192.168.1.20:7878 或 [::1]:7878")?;
+            if address.port() == 0
+                || address.ip().is_unspecified()
+                || address.ip().is_multicast()
+                || address.ip() == std::net::Ipv4Addr::BROADCAST
+            {
+                return Err("目标地址需为有效的单播 IP 和非零端口".into());
+            }
+            if !(1..=100).contains(&self.jpeg_quality) {
+                return Err("JPEG 质量范围是 1–100".into());
+            }
+            if !(1..=1000).contains(&self.send_timeout_ms) {
+                return Err("发送超时范围是 1–1000 ms".into());
+            }
+        }
         let r = self.region;
         if self.name.trim().is_empty()
             || self.name.len() > 180
@@ -117,7 +162,7 @@ impl Config {
         {
             return Err("宽度需为偶数，尺寸至少2像素，总像素不能超过33177600".into());
         }
-        if self.pixel == PixelFormat::Nv12 && !r.height.is_multiple_of(2) {
+        if self.capture_pixel() == PixelFormat::Nv12 && !r.height.is_multiple_of(2) {
             return Err("NV12的高度需为偶数".into());
         }
         if !(1..=1000).contains(&self.fps) {
@@ -130,6 +175,13 @@ impl Config {
             return Err("采集坐标超出支持范围".into());
         }
         Ok(())
+    }
+    pub fn capture_pixel(&self) -> PixelFormat {
+        if self.transport == Transport::Ndi {
+            self.pixel
+        } else {
+            PixelFormat::Bgrx
+        }
     }
     pub fn select_monitor(&mut self, monitor: &Monitor) -> Result<(), String> {
         let region = if let Some(size) = self.preset {
@@ -166,6 +218,7 @@ pub struct Stats {
     pub wait_ms: f64,
     pub frames: u64,
     pub repeats: u64,
+    pub dropped: u64,
     pub uptime_sec: f64,
     pub error: Option<String>,
     pub ndi_version: String,
