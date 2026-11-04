@@ -326,8 +326,7 @@ mod windows_worker {
                 }
                 Err(CaptureError::Recoverable(reason)) => self.recover(config, shared, &reason),
                 Err(CaptureError::Unsupported(reason))
-                    if (config.backend == Backend::Auto && !config.unlimited)
-                        || self.retry.pending() =>
+                    if config.backend == Backend::Auto || self.retry.pending() =>
                 {
                     self.recover(config, shared, &reason)
                 }
@@ -342,7 +341,7 @@ mod windows_worker {
         ) -> Result<(), String> {
             self.capture = None;
             self.retry.failed(Instant::now());
-            if config.backend == Backend::Auto && !config.unlimited {
+            if config.backend == Backend::Auto {
                 match Capture::gdi(config) {
                     Ok(capture) => self.capture = Some(capture),
                     Err(CaptureError::Recoverable(_) | CaptureError::Unsupported(_)) => {}
@@ -433,7 +432,7 @@ mod windows_worker {
         // Optional scalar timings only; no captured video is queued here.
         let mut timings = Vec::with_capacity(if config.diagnostics { 2048 } else { 0 });
         while !shared.stop.load(Ordering::Acquire) {
-            if !config.unlimited && !pacer.until(next, &shared.stop)? {
+            if !pacer.until(next, &shared.stop)? {
                 break;
             }
             if last_bounds_check.elapsed() >= Duration::from_secs(1) {
@@ -475,12 +474,12 @@ mod windows_worker {
                 .then(crate::diagnostics::utc_timecode_100ns)
                 .unwrap_or_default();
             let result = (|| -> Result<(), CaptureError> {
-                // Unlimited acquisition is bounded so stop and recovery remain responsive.
-                let acquired = current.acquire(if config.unlimited { 20 } else { 0 })?;
+                // The pacer owns timing; sample the latest desktop without waiting for a refresh.
+                let acquired = current.acquire(0)?;
                 let Some(acquired) = acquired else {
                     return Ok(());
                 };
-                // Capture suppresses unlimited-mode repeats except its one-second heartbeat.
+                // Reuse the last converted pixels when the desktop has not changed.
                 let plan = slots.prepare(acquired.changed);
                 let mut captured = Instant::now();
                 let mut converted = captured;
@@ -508,7 +507,7 @@ mod windows_worker {
                     .flatten();
                 let submit_started = config.diagnostics.then(Instant::now);
                 let sent = stream
-                    .submit(plan.slot, current.nominal_fps(), &shared.stop)
+                    .submit(plan.slot, config.fps, &shared.stop)
                     .map_err(CaptureError::Fatal)?;
                 slots.submitted(plan.slot);
                 if !sent {
@@ -621,9 +620,7 @@ mod windows_worker {
                 measurements = Measurements::default();
                 last_stats = now;
             }
-            if !config.unlimited {
-                next = next_frame_deadline(next, interval, now);
-            }
+            next = next_frame_deadline(next, interval, now);
         }
         shared.stats(|s| {
             s.phase = Phase::Stopping;

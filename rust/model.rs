@@ -84,7 +84,6 @@ pub struct Config {
     #[serde(default)]
     pub preset: Option<u32>,
     pub fps: u32,
-    pub unlimited: bool,
     pub backend: Backend,
     pub pixel: PixelFormat,
     pub cursor: bool,
@@ -111,8 +110,7 @@ impl Default for Config {
                 height: 512,
             },
             preset: Some(512),
-            fps: 240,
-            unlimited: false,
+            fps: 300,
             backend: Backend::Auto,
             pixel: PixelFormat::Nv12,
             cursor: false,
@@ -167,9 +165,6 @@ impl Config {
         }
         if !(1..=1000).contains(&self.fps) {
             return Err("固定帧率范围是1–1000 fps".into());
-        }
-        if self.unlimited && self.backend == Backend::Gdi {
-            return Err("跟随刷新率模式需要DXGI采集".into());
         }
         if !(-100_000..=100_000).contains(&r.x) || !(-100_000..=100_000).contains(&r.y) {
             return Err("采集坐标超出支持范围".into());

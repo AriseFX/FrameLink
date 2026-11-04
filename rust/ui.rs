@@ -635,31 +635,18 @@ impl DesktopApp {
                     divider(ui);
                     ui.add_space(13.0);
                     field_label(ui, "发送帧率");
-                    ui.horizontal(|ui| {
-                        ui.add_enabled(
-                            !self.config.unlimited,
-                            egui::DragValue::new(&mut self.config.fps)
-                                .range(1..=1000)
-                                .speed(1.0)
-                                .suffix(" fps"),
-                        );
-
-                        ui.add_space(15.0);
-                        ui.checkbox(
-                            &mut self.config.unlimited,
-                            RichText::new("跟随刷新率").size(12.0),
-                        )
-                        .on_hover_text("不使用上方帧率：屏幕每更新一次就发一帧，不补帧、不重复。");
-                    });
+                    ui.add(
+                        egui::DragValue::new(&mut self.config.fps)
+                            .range(1..=1000)
+                            .speed(1.0)
+                            .suffix(" fps"),
+                    )
+                    .on_hover_text("点击数值直接输入，范围 1–1000 fps。");
                     ui.add_space(5.0);
                     ui.label(
-                        RichText::new(if self.config.unlimited {
-                            "跟随屏幕更新：画面变化多少就发多少"
-                        } else {
-                            "固定帧率：高于屏幕更新会产生重复帧"
-                        })
-                        .size(11.0)
-                        .color(MUTED),
+                        RichText::new("点击填写固定帧率 · 高于桌面更新时会重复发送")
+                            .size(11.0)
+                            .color(MUTED),
                     );
                 });
 
@@ -1009,16 +996,16 @@ impl DesktopApp {
             metric(
                 ui,
                 width,
-                "等新帧",
+                "采集等待",
                 if active {
                     format!("{:.2}", self.stats.wait_ms)
                 } else {
                     "—".into()
                 },
                 "ms",
-                "空闲等待，不计入处理",
+                "采集等待，不计入处理",
                 Some(
-                    "上一帧提交后等待桌面出新画面的空闲时间，不计入“发送端处理”。跟随刷新率模式要等到下一帧出现才采集，帧一出现就立即发出，这段等待不会增加画面延迟；固定帧率模式按节拍取帧，这里接近 0。",
+                    "采集接口内的等待耗时，不计入“发送端处理”。固定帧率按设定节拍取帧，不额外等待桌面更新，此值通常接近 0。",
                 ),
             );
         });

@@ -130,7 +130,6 @@ pub fn import_ini(bytes: &[u8]) -> Result<Config, String> {
         .map_err(|_| "旧配置高度为负数")?;
     c.fps = u32::try_from(integer("fps", c.fps as i32)?).map_err(|_| "旧配置帧率为负数")?;
     c.cursor = integer("cursor", 0)? != 0;
-    c.unlimited = integer("unlimited", 0)? != 0;
     c.precision = if values.contains_key("lowlatency") {
         integer("lowlatency", 0)? != 0
     } else {
@@ -181,6 +180,31 @@ mod tests {
         assert!(import_ini(b"[capture]\nwidth=-8").is_err());
         assert!(import_ini(b"[capture]\nwidth=513").is_err());
         assert!(parse("fps = 0").is_err());
+    }
+    #[test]
+    fn old_follow_mode_keeps_custom_fps_and_is_not_saved_again() {
+        for config in [
+            parse("fps = 475\nunlimited = true\nbackend = \"Gdi\"").unwrap(),
+            import_ini(b"[capture]\nfps=475\nunlimited=1\nbackend=2").unwrap(),
+        ] {
+            assert_eq!(config.fps, 475);
+            assert_eq!(config.backend, Backend::Gdi);
+            let saved = toml::to_string(&config).unwrap();
+            assert!(!saved.contains("unlimited"));
+            assert_eq!(parse(&saved).unwrap().fps, 475);
+        }
+        assert_eq!(parse("unlimited = true").unwrap().fps, 300);
+    }
+    #[test]
+    fn custom_fixed_fps_survives_settings_round_trip() {
+        for fps in [1, 300, 475, 1000] {
+            let config = Config {
+                fps,
+                ..Config::default()
+            };
+            assert_eq!(parse(&toml::to_string(&config).unwrap()).unwrap().fps, fps);
+        }
+        assert!(parse("fps = 1001").is_err());
     }
     #[test]
     fn round_trip_preserves_preferences() {

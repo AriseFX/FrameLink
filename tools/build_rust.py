@@ -83,6 +83,9 @@ def main():
                      (root / "README.md", "README.md"),
                      (root / "docs/使用说明.md", "docs/使用说明.md"),
                      (root / "docs/开发说明.md", "docs/开发说明.md"),
+                     (root / "docs/延迟测试.md", "docs/延迟测试.md"),
+                     (root / "docs/validation/ndi-fixed-fps-2026-11-04.json", "docs/validation/ndi-fixed-fps-2026-11-04.json"),
+                     (root / "docs/validation/ndi-latency-2026-11-04.json", "docs/validation/ndi-latency-2026-11-04.json"),
                      (root / "docs/传输协议.md", "docs/传输协议.md"),
                      (root / "tests/SingleInstanceVerification.ps1", "tests/SingleInstanceVerification.ps1"))
     for source, _ in package_files:
@@ -138,8 +141,8 @@ MSVC 构建需要 Microsoft Visual C++ 2015–2022 x64 运行库。
 
 NDI 模式需要同目录的 Processing.NDI.Lib.x64.dll，TCP / UDP 不加载该 DLL。
 TCP 连续发送 JPEG；UDP 一包一张 JPEG，单张上限 65,507 字节。
-默认采集中心 512 × 512 区域，请求帧率 240 fps，关闭鼠标与预览。
-实际帧率取决于画面更新、编码耗时和网络状况。
+默认采集中心 512 × 512 区域，固定发送 300 fps，关闭鼠标与预览。
+点击“发送帧率”可填写 1–1000 fps。画面没有更新时重复发送上一帧，实际速率受处理和网络负载影响。
 
 关闭窗口默认收到托盘并继续发送。双击托盘图标恢复，右键菜单可停止发送或退出。
 设置自动保存到 %LOCALAPPDATA%\\FrameLink\\settings.toml。

@@ -2,15 +2,9 @@ use crate::model::PixelFormat;
 #[cfg(any(windows, test))]
 use crate::model::{Config, Transport};
 
-#[derive(Clone, Copy, Debug)]
-enum Pacing {
-    Fixed(u32),
-    FollowRefresh,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct SendOptions {
-    pacing: Option<Pacing>,
+    fps: Option<u32>,
     pixel: Option<PixelFormat>,
 }
 
@@ -20,20 +14,19 @@ impl SendOptions {
         let mut args = args.iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
-                "--fps" | "--follow-refresh" => {
-                    if options.pacing.is_some() {
-                        return Err("--fps 与 --follow-refresh 只能指定其中一项，且不能重复".into());
+                "--fps" => {
+                    if options.fps.is_some() {
+                        return Err("--fps 不能重复指定".into());
                     }
-                    options.pacing = Some(if arg == "--fps" {
-                        let fps = args
-                            .next()
+                    options.fps = Some(
+                        args.next()
                             .and_then(|s| s.parse::<u32>().ok())
                             .filter(|fps| (1..=1000).contains(fps))
-                            .ok_or("--fps 需要 1–1000 的整数")?;
-                        Pacing::Fixed(fps)
-                    } else {
-                        Pacing::FollowRefresh
-                    });
+                            .ok_or("--fps 需要 1–1000 的整数")?,
+                    );
+                }
+                "--follow-refresh" => {
+                    return Err("跟随刷新率模式已移除，请使用 --fps 指定固定帧率".into());
                 }
                 "--pixel" => {
                     if options.pixel.is_some() {
@@ -59,13 +52,8 @@ impl SendOptions {
             }
             config.pixel = pixel;
         }
-        match self.pacing {
-            Some(Pacing::Fixed(fps)) => {
-                config.fps = fps;
-                config.unlimited = false;
-            }
-            Some(Pacing::FollowRefresh) => config.unlimited = true,
-            None => {}
+        if let Some(fps) = self.fps {
+            config.fps = fps;
         }
         Ok(())
     }
@@ -81,18 +69,17 @@ mod tests {
     fn overrides_pacing_without_changing_unrelated_settings() {
         let saved = Config::default();
         let mut run = saved.clone();
-        parse(&["--follow-refresh", "--pixel", "bgrx"])
+        parse(&["--fps", "475", "--pixel", "bgrx"])
             .unwrap()
             .apply(&mut run)
             .unwrap();
-        assert!(run.unlimited);
+        assert_eq!(run.fps, 475);
         assert_eq!(run.pixel, PixelFormat::Bgrx);
         assert_eq!(run.region, saved.region);
         assert_eq!(run.network_adapter, saved.network_adapter);
         parse(&["--fps", "120"]).unwrap().apply(&mut run).unwrap();
-        assert!(!run.unlimited);
         assert_eq!(run.fps, 120);
-        assert!(!saved.unlimited);
+        assert_eq!(saved.fps, 300);
         assert_eq!(saved.pixel, PixelFormat::Nv12);
     }
     #[test]
@@ -102,7 +89,8 @@ mod tests {
             vec!["--fps", "0"],
             vec!["--fps", "1001"],
             vec!["--fps", "240", "--follow-refresh"],
-            vec!["--follow-refresh", "--follow-refresh"],
+            vec!["--fps", "240", "--fps", "300"],
+            vec!["--follow-refresh"],
             vec!["--pixel", "rgba"],
             vec!["--pixel", "nv12", "--pixel", "bgrx"],
             vec!["--unknown"],

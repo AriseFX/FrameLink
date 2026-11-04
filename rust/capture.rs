@@ -362,13 +362,10 @@ struct DxgiCapture {
     duplication: IDXGIOutputDuplication,
     region: Region,
     bounds: RECT,
-    nominal: u32,
     has_image: bool,
     cursor: bool,
     separate_cursor: bool,
     cursor_buffer: Option<Dib>,
-    unlimited: bool,
-    last_yield: Instant,
     diagnostics: CaptureDiagnostics,
     diagnostics_enabled: bool,
     qpc_frequency: Option<i64>,
@@ -476,23 +473,6 @@ impl DxgiCapture {
                         .map_err(|e| error("创建区域读取纹理", e))?;
                     let staging = staging
                         .ok_or_else(|| CaptureError::Fatal("D3D11没有返回读取纹理".into()))?;
-                    let mut mode = DEVMODEW {
-                        dmSize: size_of::<DEVMODEW>() as u16,
-                        ..Default::default()
-                    };
-                    let nominal = if config.unlimited
-                        && EnumDisplaySettingsW(
-                            PCWSTR(description.DeviceName.as_ptr()),
-                            ENUM_CURRENT_SETTINGS,
-                            &mut mode,
-                        )
-                        .as_bool()
-                        && (2..=1000).contains(&mode.dmDisplayFrequency)
-                    {
-                        mode.dmDisplayFrequency
-                    } else {
-                        config.fps
-                    };
                     return Ok(Self {
                         held_frame: None,
                         context,
@@ -500,7 +480,6 @@ impl DxgiCapture {
                         duplication,
                         region: config.region,
                         bounds: description.DesktopCoordinates,
-                        nominal,
                         has_image: false,
                         cursor: config.cursor,
                         separate_cursor: false,
@@ -509,8 +488,6 @@ impl DxgiCapture {
                         } else {
                             None
                         },
-                        unlimited: config.unlimited,
-                        last_yield: Instant::now(),
                         diagnostics: CaptureDiagnostics::default(),
                         diagnostics_enabled: config.diagnostics,
                         qpc_frequency: if config.diagnostics {
@@ -612,10 +589,6 @@ impl DxgiCapture {
         if !self.has_image {
             return Ok(None);
         }
-        if self.unlimited && !changed && self.last_yield.elapsed() < Duration::from_secs(1) {
-            return Ok(None);
-        }
-        self.last_yield = Instant::now();
         Ok(Some(Acquired {
             changed,
             wait: waited,
@@ -675,7 +648,6 @@ enum CaptureInner {
     Gdi {
         region: Region,
         cursor: bool,
-        nominal: u32,
         buffer: Dib,
         has_image: bool,
         diagnostics: CaptureDiagnostics,
@@ -710,7 +682,6 @@ impl Capture {
             inner: CaptureInner::Gdi {
                 region: config.region,
                 cursor: config.cursor,
-                nominal: config.fps,
                 buffer: Dib::new(config.region.width, config.region.height)?,
                 has_image: false,
                 diagnostics: CaptureDiagnostics::default(),
@@ -761,12 +732,6 @@ impl Capture {
                 }
                 Ok(callback(buffer.bytes(), buffer.stride()))
             }
-        }
-    }
-    pub fn nominal_fps(&self) -> u32 {
-        match &self.inner {
-            CaptureInner::Dxgi(c) => c.nominal,
-            CaptureInner::Gdi { nominal, .. } => *nominal,
         }
     }
     pub fn is_dxgi(&self) -> bool {

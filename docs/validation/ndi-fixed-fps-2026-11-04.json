@@ -1,0 +1,213 @@
+{
+  "date": "2026-11-04",
+  "source_commit": "97bdca934296aadc98206f86ef9eb19f3fdbd2e8",
+  "scope": "DXGI desktop update to decoded NAS CPU pixels; no test window, no display, no AI",
+  "hardware": {
+    "sender_gpu": "Radeon RX 9070 XT",
+    "receiver_cpu": "Intel N100",
+    "receiver_logical_cpus": 4,
+    "link_mbps": 2500
+  },
+  "warmup_seconds_per_trial": 3,
+  "comparison_300_500": {
+    "scope": "DXGI desktop update to decoded NAS CPU pixels; no test window, no display, no AI",
+    "source_commit": "97bdca934296aadc98206f86ef9eb19f3fdbd2e8",
+    "clock_uncertainty_bound_ms": 0.3119525,
+    "groups": {
+      "300": {
+        "trials": 2,
+        "seconds": 60.0,
+        "received_frames": 18002,
+        "fresh_desktop_updates": 2304,
+        "latency_ms": {
+          "n": 2304,
+          "min": 2.350615796467821,
+          "median": 4.3890805995167455,
+          "p95": 5.997936244501545,
+          "p99": 6.492396627199298,
+          "max": 12.996887032917243,
+          "mean": 4.461674113982735
+        },
+        "nas_receiver_percent_total_cpu": 14.623261295657567,
+        "sender_cpu_percent_one_core": 23.0423860601329
+      },
+      "500": {
+        "trials": 1,
+        "seconds": 30.0,
+        "received_frames": 15000,
+        "fresh_desktop_updates": 1234,
+        "latency_ms": {
+          "n": 1234,
+          "min": 1.8602404934888455,
+          "median": 3.033956550608167,
+          "p95": 3.970344077494076,
+          "p99": 4.750424678293143,
+          "max": 6.998987228446538,
+          "mean": 3.043901046118898
+        },
+        "nas_receiver_percent_total_cpu": 15.285255258225215,
+        "sender_cpu_percent_one_core": 44.87477140457373
+      }
+    },
+    "sender_cpu_reduction_300_vs_500_percent": 48.65180291974842,
+    "notes": [
+      "640x640 DXGI, NV12 send, BGRX receive; current desktop without test window.",
+      "Receive CPU normalized to four logical CPUs of Intel N100.",
+      "No AI preprocessing, GPU upload, inference or receiver display.",
+      "Raw results and matched CSV files were retained; all timecode joins passed."
+    ]
+  },
+  "prior_1000_fps": {
+    "trials": [
+      {
+        "label": "tune08",
+        "seconds": 30.0,
+        "video": {
+          "width": 640,
+          "height": 640,
+          "fourcc": "BGRX",
+          "rate_n": 1000,
+          "rate_d": 1
+        },
+        "clock_uncertainty_bound_ms": 0.253217,
+        "received_frames": 30001,
+        "desktop_updates": 1273,
+        "desktop_updates_per_second": 42.43333333333333,
+        "latency_ms": {
+          "n": 1273,
+          "min": 1.6836355939786927,
+          "median": 2.26645008260914,
+          "p95": 2.6874312439435357,
+          "p99": 3.2493051951526013,
+          "max": 10.192624462605579,
+          "mean": 2.259599728898427
+        },
+        "receiver_cpu_percent_one_core": 91.79679269681766,
+        "sender_cpu_percent_one_core": 61.59377628423144
+      },
+      {
+        "label": "tune10",
+        "seconds": 30.0,
+        "video": {
+          "width": 640,
+          "height": 640,
+          "fourcc": "BGRX",
+          "rate_n": 1000,
+          "rate_d": 1
+        },
+        "clock_uncertainty_bound_ms": 0.3209965,
+        "received_frames": 30000,
+        "desktop_updates": 1278,
+        "desktop_updates_per_second": 42.6,
+        "latency_ms": {
+          "n": 1278,
+          "min": 1.6878075769196244,
+          "median": 2.311920154284337,
+          "p95": 2.7728936625463803,
+          "p99": 4.564009776195633,
+          "max": 7.469064057501555,
+          "mean": 2.3309071936165147
+        },
+        "receiver_cpu_percent_one_core": 94.87648565024465,
+        "sender_cpu_percent_one_core": 85.09084217841902
+      }
+    ],
+    "seconds": 60.0,
+    "clock_uncertainty_bound_ms": 0.3209965,
+    "desktop_updates_per_second": 42.516666666666666,
+    "receiver_cpu_percent_total_capacity": 23.33415979338279,
+    "update_identity": "sender_desktop_update_frame",
+    "primary_metric": "desktop_update_to_decoded_ms",
+    "primary_latency_ms": {
+      "n": 2551,
+      "min": 1.6836355939786927,
+      "median": 2.2910184155256275,
+      "p95": 2.736455191428547,
+      "p99": 3.854972651821754,
+      "max": 10.192624462605579,
+      "mean": 2.2953233431319497
+    },
+    "received_frames": 60001,
+    "updates_after_initial_sample": 2551,
+    "frames_without_desktop_timestamp": 0,
+    "negative_ndi_samples": 0,
+    "negative_desktop_samples": 0,
+    "all_arrivals_including_repeats_ms": {
+      "ndi_to_decoded_ms": {
+        "n": 60001,
+        "min": 1.262400740132648,
+        "median": 1.4353766294219668,
+        "p95": 1.7731258478889913,
+        "p99": 2.856270636065233,
+        "max": 10.198917986271567,
+        "mean": 1.508726859379045
+      },
+      "desktop_update_to_submit_ms": {
+        "n": 60001,
+        "min": 0.3056,
+        "median": 13.1498,
+        "p95": 31.8848,
+        "p99": 34.2262,
+        "max": 41.075,
+        "mean": 14.520497483375276
+      },
+      "desktop_update_to_decoded_ms": {
+        "n": 60001,
+        "min": 1.6836355939786927,
+        "median": 14.702440018903985,
+        "p95": 33.333043433897785,
+        "p99": 35.756166156946676,
+        "max": 42.48596856703659,
+        "mean": 16.029224342754322
+      }
+    },
+    "fresh_update_first_arrival_ms": {
+      "ndi_to_decoded_ms": {
+        "n": 2551,
+        "min": 1.306931428525104,
+        "median": 1.436094211205841,
+        "p95": 1.6025362070477058,
+        "p99": 3.0752152900051897,
+        "max": 9.803624462605569,
+        "mean": 1.4849107206309695
+      },
+      "desktop_update_to_submit_ms": {
+        "n": 2551,
+        "min": 0.3056,
+        "median": 0.848,
+        "p95": 1.2383,
+        "p99": 1.329,
+        "max": 1.6836,
+        "mean": 0.81041262250098
+      },
+      "desktop_update_to_decoded_ms": {
+        "n": 2551,
+        "min": 1.6836355939786927,
+        "median": 2.2910184155256275,
+        "p95": 2.736455191428547,
+        "p99": 3.854972651821754,
+        "max": 10.192624462605579,
+        "mean": 2.2953233431319497
+      }
+    },
+    "median_reduction_vs_follow_nv12_bgrx_percent": 66.6283740003098
+  },
+  "limitations": [
+    "Actual desktop content was not controlled; the 1000 fps trials were run in an earlier batch.",
+    "Receive output is BGRX at 640x640. Primary statistics count first arrival of each delivered desktop update; repeated frames are reported separately.",
+    "Reported receiver CPU is the receiving process only, normalized to the four logical CPUs of Intel N100.",
+    "Source drawing, receiver display, AI preprocessing, GPU upload and inference are excluded.",
+    "Measurements used the fixed-rate path of the recorded source commit before follow-refresh mode was removed."
+  ],
+  "sender_options": {
+    "backend": "Dxgi",
+    "precision": true,
+    "cursor": false,
+    "preview": false,
+    "pixel": "Nv12",
+    "crop": [
+      640,
+      640
+    ]
+  }
+}
