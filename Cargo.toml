@@ -1,6 +1,6 @@
 [package]
 name = "framelink"
-version = "3.1.4-dev"
+version = "3.1.5-dev"
 edition = "2024"
 rust-version = "1.88"
 build = "rust/build.rs"

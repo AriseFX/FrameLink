@@ -356,6 +356,7 @@ mod windows_sender {
         source: String,
         backend: String,
         ndi_version: String,
+        worker_priority: Option<i32>,
         frames: u64,
         gpu_path_frames: usize,
         repeats: u64,
@@ -520,6 +521,7 @@ mod windows_sender {
             source: stats.source,
             backend: stats.backend,
             ndi_version: stats.ndi_version,
+            worker_priority: stats.worker_priority,
             frames: stats.frames,
             gpu_path_frames: trace
                 .samples

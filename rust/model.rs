@@ -224,6 +224,7 @@ pub struct Stats {
     pub uptime_sec: f64,
     pub error: Option<String>,
     pub ndi_version: String,
+    pub worker_priority: Option<i32>,
     pub timings: Vec<crate::diagnostics::FrameTiming>,
 }
 #[cfg(test)]

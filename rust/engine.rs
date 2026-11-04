@@ -164,6 +164,8 @@ impl Drop for Engine {
 }
 
 #[cfg(windows)]
+mod scheduling;
+#[cfg(windows)]
 mod send_pipeline;
 
 #[cfg(windows)]
@@ -356,6 +358,8 @@ mod windows_worker {
     }
     pub(super) fn run(shared: &Shared, config: &Config) -> Result<(), String> {
         validate_desktop_region(config)?;
+        let priority = super::scheduling::CapturePriority::new();
+        shared.stats(|s| s.worker_priority = priority.level());
         let ndi = if config.transport == Transport::Ndi {
             Some(Ndi::load()?)
         } else {

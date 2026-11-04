@@ -1,0 +1,485 @@
+{
+  "date": "2026-11-04",
+  "baseline_commit": "b5b86cc7f2710278e36b91a4e898be302e331463",
+  "candidate_source_sha256": {
+    "rust/engine.rs": "818cda2db72d6789384f9ff4df67c8f944085aa1231c04ad383b5f864798da5e",
+    "rust/engine/scheduling.rs": "aa44a4ae6629ce9e935329763a92c26e2b61e0ccdf83c7829a0168b69c0442d5",
+    "rust/model.rs": "9cc75ef7981e2658eaf5be70094f4a062568980095328df2adbdcb5ec13c23e5",
+    "rust/diagnostics.rs": "f86084884ef0cb5478c40b58ec84252989ae18e52c4c3c6442b210ea1fef3cde"
+  },
+  "baseline_executable_sha256": "c401217d070955a35bcc34b0be55723524bbb40194983388900efe2e506b4108",
+  "candidate_executable_sha256": "62aa24e0e2ea9e4f7f3541476d9e74e313f44b20d266dcde514854dddec2f37e",
+  "scope": "Same-host desktop update to NDI decoded CPU pixels; no display or AI. Controlled contention pins only the capture worker to one logical CPU shared with a normal-priority synthetic busy process; not a real game benchmark.",
+  "method": "ABBA per condition, 2 s warmup and 6 s receiver measurement per trial; same-host UTC, exact NDI timecode join, first arrival of each desktop update. Source desktop content was not controlled.",
+  "configuration": {
+    "size": [
+      416,
+      416
+    ],
+    "fps": 300,
+    "pixel": "NV12",
+    "backend": "DXGI",
+    "precision": true,
+    "gpu_conversion": false,
+    "cursor": false
+  },
+  "hardware": {
+    "sender_gpu": "Radeon RX 9070 XT",
+    "receiver": "Same Windows machine; NDI 6.3.2 decoded BGRA memory"
+  },
+  "change": "Raise only the capture/send worker from THREAD_PRIORITY_NORMAL (0) to THREAD_PRIORITY_ABOVE_NORMAL (1). No process-priority, GPU-priority, affinity, or system timer changes in production.",
+  "limitations": [
+    "Controlled contention pins the capture worker to one logical CPU shared with a normal-priority synthetic busy process. This affinity is only applied by the private test harness.",
+    "This is not a real game benchmark, not a cross-machine network test, and not an AI benchmark.",
+    "Source drawing and earlier desktop composition, receiver application copies, display, GPU upload and AI are excluded.",
+    "Short runs on a changing desktop demonstrate tail-latency resilience under this contention condition, not a universal latency or CPU-utilization improvement."
+  ],
+  "groups": {
+    "idle_baseline": {
+      "trials": 2,
+      "measurement_seconds": 12,
+      "update_identity": "sender_desktop_update_frame",
+      "primary_metric": "desktop_update_to_decoded_ms",
+      "primary_latency_ms": {
+        "n": 619,
+        "min": 2.3825,
+        "median": 4.4769,
+        "p95": 6.404,
+        "p99": 6.9924,
+        "max": 13.057,
+        "mean": 4.586016962843296
+      },
+      "received_frames": 3602,
+      "updates_after_initial_sample": 619,
+      "frames_without_desktop_timestamp": 0,
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0,
+      "all_arrivals_including_repeats_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 3602,
+          "min": 1.7341,
+          "median": 2.60895,
+          "p95": 3.6443,
+          "p99": 3.8911,
+          "max": 4.3148,
+          "mean": 2.7608009161576903
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 3602,
+          "min": 0.2055,
+          "median": 10.73275,
+          "p95": 29.9209,
+          "p99": 33.9583,
+          "max": 37.6069,
+          "mean": 12.43987176568573
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 3602,
+          "min": 2.3825,
+          "median": 13.554,
+          "p95": 32.5637,
+          "p99": 36.6593,
+          "max": 40.7335,
+          "mean": 15.20067268184342
+        }
+      },
+      "fresh_update_first_arrival_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 619,
+          "min": 1.7341,
+          "median": 2.5402,
+          "p95": 3.539,
+          "p99": 3.721,
+          "max": 4.0308,
+          "mean": 2.7225891760904686
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 619,
+          "min": 0.2055,
+          "median": 1.7378,
+          "p95": 3.4417,
+          "p99": 3.7246,
+          "max": 9.9422,
+          "mean": 1.863427786752827
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 619,
+          "min": 2.3825,
+          "median": 4.4769,
+          "p95": 6.404,
+          "p99": 6.9924,
+          "max": 13.057,
+          "mean": 4.586016962843296
+        }
+      },
+      "received_fps": 300.1666666666667
+    },
+    "idle_candidate": {
+      "trials": 2,
+      "measurement_seconds": 12,
+      "update_identity": "sender_desktop_update_frame",
+      "primary_metric": "desktop_update_to_decoded_ms",
+      "primary_latency_ms": {
+        "n": 587,
+        "min": 2.392,
+        "median": 4.6209,
+        "p95": 6.2136,
+        "p99": 6.8029,
+        "max": 12.604,
+        "mean": 4.636142078364566
+      },
+      "received_frames": 3602,
+      "updates_after_initial_sample": 587,
+      "frames_without_desktop_timestamp": 0,
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0,
+      "all_arrivals_including_repeats_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 3602,
+          "min": 1.7266,
+          "median": 2.603,
+          "p95": 3.6373,
+          "p99": 3.8462,
+          "max": 4.4758,
+          "mean": 2.7428484175458077
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 3602,
+          "min": 0.2341,
+          "median": 11.060300000000002,
+          "p95": 30.5348,
+          "p99": 33.9631,
+          "max": 34.669,
+          "mean": 12.808428789561354
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 3602,
+          "min": 2.392,
+          "median": 13.7858,
+          "p95": 33.0766,
+          "p99": 36.6806,
+          "max": 37.8081,
+          "mean": 15.551277207107162
+        }
+      },
+      "fresh_update_first_arrival_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 587,
+          "min": 1.7266,
+          "median": 2.4974,
+          "p95": 3.5138,
+          "p99": 3.7653,
+          "max": 3.9878,
+          "mean": 2.692368654173765
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 587,
+          "min": 0.2341,
+          "median": 1.8386,
+          "p95": 3.3913,
+          "p99": 3.5377,
+          "max": 10.2072,
+          "mean": 1.9437734241908007
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 587,
+          "min": 2.392,
+          "median": 4.6209,
+          "p95": 6.2136,
+          "p99": 6.8029,
+          "max": 12.604,
+          "mean": 4.636142078364566
+        }
+      },
+      "received_fps": 300.1666666666667
+    },
+    "contended_baseline": {
+      "trials": 2,
+      "measurement_seconds": 12,
+      "update_identity": "sender_desktop_update_frame",
+      "primary_metric": "desktop_update_to_decoded_ms",
+      "primary_latency_ms": {
+        "n": 499,
+        "min": 1.7159,
+        "median": 4.5333,
+        "p95": 6.8271,
+        "p99": 25.9433,
+        "max": 61.5054,
+        "mean": 5.239110220440882
+      },
+      "received_frames": 3449,
+      "updates_after_initial_sample": 499,
+      "frames_without_desktop_timestamp": 0,
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0,
+      "all_arrivals_including_repeats_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 3449,
+          "min": 0.8403,
+          "median": 2.6274,
+          "p95": 3.7355,
+          "p99": 4.0287,
+          "max": 4.1825,
+          "mean": 2.7830122064366485
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 3449,
+          "min": 0.2088,
+          "median": 13.2457,
+          "p95": 31.6516,
+          "p99": 34.1928,
+          "max": 59.8142,
+          "mean": 14.575186778776457
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 3449,
+          "min": 1.7159,
+          "median": 16.2394,
+          "p95": 34.2807,
+          "p99": 36.9761,
+          "max": 62.5134,
+          "mean": 17.358198985213104
+        }
+      },
+      "fresh_update_first_arrival_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 499,
+          "min": 0.8403,
+          "median": 2.5703,
+          "p95": 3.6346,
+          "p99": 3.9202,
+          "max": 3.9567,
+          "mean": 2.701213026052104
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 499,
+          "min": 0.2088,
+          "median": 1.7999,
+          "p95": 3.5227,
+          "p99": 24.1283,
+          "max": 59.7893,
+          "mean": 2.5378971943887776
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 499,
+          "min": 1.7159,
+          "median": 4.5333,
+          "p95": 6.8271,
+          "p99": 25.9433,
+          "max": 61.5054,
+          "mean": 5.239110220440882
+        }
+      },
+      "received_fps": 287.4166666666667
+    },
+    "contended_candidate": {
+      "trials": 2,
+      "measurement_seconds": 12,
+      "update_identity": "sender_desktop_update_frame",
+      "primary_metric": "desktop_update_to_decoded_ms",
+      "primary_latency_ms": {
+        "n": 463,
+        "min": 2.1125,
+        "median": 4.5015,
+        "p95": 6.481,
+        "p99": 6.8252,
+        "max": 7.1228,
+        "mean": 4.593530669546436
+      },
+      "received_frames": 3602,
+      "updates_after_initial_sample": 463,
+      "frames_without_desktop_timestamp": 0,
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0,
+      "all_arrivals_including_repeats_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 3602,
+          "min": 1.7211,
+          "median": 2.61655,
+          "p95": 3.7121,
+          "p99": 4.0086,
+          "max": 4.8512,
+          "mean": 2.7866849250416434
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 3602,
+          "min": 0.1896,
+          "median": 14.01905,
+          "p95": 32.6584,
+          "p99": 34.3054,
+          "max": 39.4563,
+          "mean": 15.025186896168796
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 3602,
+          "min": 2.1125,
+          "median": 16.64785,
+          "p95": 35.3458,
+          "p99": 37.1016,
+          "max": 42.0977,
+          "mean": 17.81187182121044
+        }
+      },
+      "fresh_update_first_arrival_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 463,
+          "min": 1.7935,
+          "median": 2.5717,
+          "p95": 3.5602,
+          "p99": 4.0228,
+          "max": 4.7446,
+          "mean": 2.742582505399568
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 463,
+          "min": 0.1896,
+          "median": 1.8122,
+          "p95": 3.2361,
+          "p99": 3.4014,
+          "max": 3.5167,
+          "mean": 1.8509481641468684
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 463,
+          "min": 2.1125,
+          "median": 4.5015,
+          "p95": 6.481,
+          "p99": 6.8252,
+          "max": 7.1228,
+          "mean": 4.593530669546436
+        }
+      },
+      "received_fps": 300.1666666666667
+    }
+  },
+  "trials": [
+    {
+      "label": "idle-0-baseline",
+      "variant": "baseline",
+      "controlled_contention": false,
+      "received_fps": 300.1666666666667,
+      "sender_cpu_percent_one_core": 23.107500032199713,
+      "primary_latency_ms": {
+        "n": 273,
+        "min": 2.4139,
+        "median": 4.4742,
+        "p95": 6.247,
+        "p99": 6.5583,
+        "max": 6.5862,
+        "mean": 4.506614285714286
+      }
+    },
+    {
+      "label": "idle-1-candidate",
+      "variant": "candidate",
+      "controlled_contention": false,
+      "received_fps": 300.1666666666667,
+      "sender_cpu_percent_one_core": 20.63667307450637,
+      "primary_latency_ms": {
+        "n": 310,
+        "min": 2.392,
+        "median": 4.57375,
+        "p95": 6.1769,
+        "p99": 6.6133,
+        "max": 12.604,
+        "mean": 4.586661935483871
+      }
+    },
+    {
+      "label": "idle-2-candidate",
+      "variant": "candidate",
+      "controlled_contention": false,
+      "received_fps": 300.1666666666667,
+      "sender_cpu_percent_one_core": 22.042881555589734,
+      "primary_latency_ms": {
+        "n": 277,
+        "min": 2.4376,
+        "median": 4.7196,
+        "p95": 6.2912,
+        "p99": 7.0909,
+        "max": 10.5776,
+        "mean": 4.691516967509025
+      }
+    },
+    {
+      "label": "idle-3-baseline",
+      "variant": "baseline",
+      "controlled_contention": false,
+      "received_fps": 300.1666666666667,
+      "sender_cpu_percent_one_core": 16.21914078948683,
+      "primary_latency_ms": {
+        "n": 346,
+        "min": 2.3825,
+        "median": 4.47705,
+        "p95": 6.4423,
+        "p99": 11.5923,
+        "max": 13.057,
+        "mean": 4.6486670520231215
+      }
+    },
+    {
+      "label": "contended-0-baseline",
+      "variant": "baseline",
+      "controlled_contention": true,
+      "received_fps": 288.6666666666667,
+      "sender_cpu_percent_one_core": 19.45412990084017,
+      "primary_latency_ms": {
+        "n": 226,
+        "min": 2.2443,
+        "median": 4.5055,
+        "p95": 6.7931,
+        "p99": 20.9132,
+        "max": 30.1157,
+        "mean": 5.1444030973451325
+      }
+    },
+    {
+      "label": "contended-1-candidate",
+      "variant": "candidate",
+      "controlled_contention": true,
+      "received_fps": 300.1666666666667,
+      "sender_cpu_percent_one_core": 13.296540150021464,
+      "primary_latency_ms": {
+        "n": 233,
+        "min": 2.1125,
+        "median": 4.5744,
+        "p95": 6.5654,
+        "p99": 6.8252,
+        "max": 7.1228,
+        "mean": 4.651314163090129
+      }
+    },
+    {
+      "label": "contended-2-candidate",
+      "variant": "candidate",
+      "controlled_contention": true,
+      "received_fps": 300.1666666666667,
+      "sender_cpu_percent_one_core": 23.465942703446697,
+      "primary_latency_ms": {
+        "n": 230,
+        "min": 2.2069,
+        "median": 4.4981,
+        "p95": 6.4552,
+        "p99": 6.7206,
+        "max": 7.0562,
+        "mean": 4.534993478260869
+      }
+    },
+    {
+      "label": "contended-3-baseline",
+      "variant": "baseline",
+      "controlled_contention": true,
+      "received_fps": 286.1666666666667,
+      "sender_cpu_percent_one_core": 16.38899991767511,
+      "primary_latency_ms": {
+        "n": 273,
+        "min": 1.7159,
+        "median": 4.5786,
+        "p95": 6.8566,
+        "p99": 25.9433,
+        "max": 61.5054,
+        "mean": 5.317512454212454
+      }
+    }
+  ]
+}
