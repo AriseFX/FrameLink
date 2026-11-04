@@ -18,6 +18,8 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Unit tests
         run: cargo test --locked --target x86_64-pc-windows-msvc --all-targets
+      - name: Latency analysis tests
+        run: python -m unittest discover -s tests -p "test_*.py"
       - name: Clippy
         run: cargo clippy --locked --target x86_64-pc-windows-msvc --all-targets -- -D warnings
       - name: Release executable

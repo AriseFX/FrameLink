@@ -470,6 +470,10 @@ mod windows_worker {
             let current = capture.capture.as_mut().unwrap();
             let is_dxgi = current.is_dxgi();
             let began = Instant::now();
+            let capture_started_100ns = config
+                .diagnostics
+                .then(crate::diagnostics::utc_timecode_100ns)
+                .unwrap_or_default();
             let result = (|| -> Result<(), CaptureError> {
                 // Unlimited acquisition is bounded so stop and recovery remain responsive.
                 let acquired = current.acquire(if config.unlimited { 20 } else { 0 })?;
@@ -494,6 +498,10 @@ mod windows_worker {
                         converted = Instant::now();
                     }
                 }
+                let source_timestamp = config
+                    .diagnostics
+                    .then(|| current.source_timestamp())
+                    .flatten();
                 let desktop_age_before_submit_ms = config
                     .diagnostics
                     .then(|| current.source_age_ms())
@@ -530,6 +538,11 @@ mod windows_worker {
                     let capture = current.diagnostics();
                     timings.push(FrameTiming {
                         frame: frames,
+                        ndi_timecode_100ns: stream.last_timecode(),
+                        capture_started_100ns,
+                        source_present_100ns: source_timestamp.map(|value| value.unix_100ns),
+                        source_clock_uncertainty_100ns: source_timestamp
+                            .map(|value| value.uncertainty_100ns),
                         refreshed: plan.refresh,
                         desktop_updated: capture.desktop_updated,
                         release_ms: capture.release_ms,

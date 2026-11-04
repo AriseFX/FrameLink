@@ -1,0 +1,552 @@
+{
+  "date": "2026-11-04",
+  "source_commit": "e5d56c6823cd4fc9bff236d28776971ccf183811",
+  "scope": "controlled comparison; source pattern paint start to decoded CPU pixels, no receiver display or AI",
+  "groups": {
+    "fixed_nv12__bgrx": {
+      "mode": "fixed_nv12",
+      "receive_color": "bgrx",
+      "video": {
+        "width": 640,
+        "height": 640,
+        "fourcc": "BGRX",
+        "rate_n": 240,
+        "rate_d": 1
+      },
+      "trials": [
+        "opt9",
+        "opt12"
+      ],
+      "seconds": 60.0,
+      "received_frames": 14402,
+      "max_clock_uncertainty_ms": 0.2936005,
+      "invalid_markers": 0,
+      "unmatched_frames": 0,
+      "fresh_frames": 5760,
+      "fresh_fps": 96.0,
+      "received_fps": 240.03333333333333,
+      "first_arrival_ms": {
+        "render_start_to_decoded_ms": {
+          "n": 5760,
+          "min": 9.496575703978351,
+          "median": 11.466937874169759,
+          "p95": 12.350698417388287,
+          "p99": 12.764402561555926,
+          "max": 17.204099398240885,
+          "mean": 11.36633963491159
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 5760,
+          "min": 3.2894253927033588,
+          "median": 5.225831407154432,
+          "p95": 5.95790940648133,
+          "p99": 6.323265624628437,
+          "max": 10.915399398240861,
+          "mean": 5.027322325883811
+        },
+        "ndi_to_decoded_ms": {
+          "n": 5760,
+          "min": 1.2394197394601747,
+          "median": 2.2101083241414585,
+          "p95": 2.4139813675365644,
+          "p99": 2.5528088833079323,
+          "max": 8.705099398240861,
+          "mean": 2.2224823258838113
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 5760,
+          "min": 1.3246,
+          "median": 3.05495,
+          "p95": 3.7133,
+          "p99": 3.8696,
+          "max": 4.5068,
+          "mean": 2.80484
+        },
+        "render_start_to_desktop_update_ms": {
+          "n": 5760,
+          "min": 4.0167,
+          "median": 6.3763000000000005,
+          "p95": 6.8,
+          "p99": 6.9782,
+          "max": 7.2526,
+          "mean": 6.339017309027778
+        }
+      },
+      "sender_segments_ms": {
+        "map_wait_ms": {
+          "n": 5760,
+          "min": 0.0973,
+          "median": 0.1379,
+          "p95": 0.1741,
+          "p99": 0.1893,
+          "max": 0.2904,
+          "mean": 0.14048444444444444
+        },
+        "conversion_ms": {
+          "n": 5760,
+          "min": 0.1091,
+          "median": 0.1139,
+          "p95": 0.1379,
+          "p99": 0.15330000000000002,
+          "max": 0.223,
+          "mean": 0.11662213541666666
+        },
+        "ndi_submit_ms": {
+          "n": 5760,
+          "min": 0.0155,
+          "median": 0.0266,
+          "p95": 0.041699999999999994,
+          "p99": 0.0478,
+          "max": 0.07550000000000001,
+          "mean": 0.02654706597222222
+        }
+      },
+      "total_median_reduction_ms": 0.0,
+      "total_median_reduction_percent": 0.0
+    },
+    "event_nv12__bgrx": {
+      "mode": "event_nv12",
+      "receive_color": "bgrx",
+      "video": {
+        "width": 640,
+        "height": 640,
+        "fourcc": "BGRX",
+        "rate_n": 144,
+        "rate_d": 1
+      },
+      "trials": [
+        "opt2",
+        "opt6"
+      ],
+      "seconds": 60.0,
+      "received_frames": 8642,
+      "max_clock_uncertainty_ms": 0.277585,
+      "invalid_markers": 0,
+      "unmatched_frames": 0,
+      "fresh_frames": 8640,
+      "fresh_fps": 144.0,
+      "received_fps": 144.03333333333333,
+      "first_arrival_ms": {
+        "render_start_to_decoded_ms": {
+          "n": 8640,
+          "min": 6.974323620051393,
+          "median": 9.285073384432849,
+          "p95": 9.9051933274024,
+          "p99": 10.162710968811496,
+          "max": 11.8691066315576,
+          "mean": 9.248977224065634
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 8640,
+          "min": 1.6817332641223284,
+          "median": 2.9521882286739682,
+          "p95": 3.2717045157686147,
+          "p99": 3.4375751887924886,
+          "max": 5.240906631557549,
+          "mean": 2.9557662634174866
+        },
+        "ndi_to_decoded_ms": {
+          "n": 8640,
+          "min": 1.3572332641223284,
+          "median": 2.6265323334471304,
+          "p95": 2.925087883845208,
+          "p99": 3.099520876637598,
+          "max": 4.919806631557549,
+          "mean": 2.6254204879545235
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 8640,
+          "min": 0.2575,
+          "median": 0.3247,
+          "p95": 0.3923,
+          "p99": 0.4284,
+          "max": 0.8289,
+          "mean": 0.33034577546296295
+        },
+        "render_start_to_desktop_update_ms": {
+          "n": 8640,
+          "min": 4.0568,
+          "median": 6.34005,
+          "p95": 6.7899,
+          "p99": 6.9631,
+          "max": 7.3976,
+          "mean": 6.293210960648148
+        }
+      },
+      "sender_segments_ms": {
+        "map_wait_ms": {
+          "n": 8640,
+          "min": 0.0935,
+          "median": 0.1474,
+          "p95": 0.185,
+          "p99": 0.2086,
+          "max": 0.6127,
+          "mean": 0.14919597222222222
+        },
+        "conversion_ms": {
+          "n": 8640,
+          "min": 0.0974,
+          "median": 0.1171,
+          "p95": 0.1417,
+          "p99": 0.1614,
+          "max": 0.2789,
+          "mean": 0.1212062962962963
+        },
+        "ndi_submit_ms": {
+          "n": 8640,
+          "min": 0.016,
+          "median": 0.023799999999999998,
+          "p95": 0.0439,
+          "p99": 0.051,
+          "max": 0.1529,
+          "mean": 0.02678189814814815
+        }
+      },
+      "total_median_reduction_ms": 2.1818644897369097,
+      "total_median_reduction_percent": 19.02743795840861
+    },
+    "event_bgrx__bgrx": {
+      "mode": "event_bgrx",
+      "receive_color": "bgrx",
+      "video": {
+        "width": 640,
+        "height": 640,
+        "fourcc": "BGRX",
+        "rate_n": 144,
+        "rate_d": 1
+      },
+      "trials": [
+        "opt3",
+        "opt5"
+      ],
+      "seconds": 60.0,
+      "received_frames": 8642,
+      "max_clock_uncertainty_ms": 0.2847595,
+      "invalid_markers": 0,
+      "unmatched_frames": 0,
+      "fresh_frames": 8640,
+      "fresh_fps": 144.0,
+      "received_fps": 144.03333333333333,
+      "first_arrival_ms": {
+        "render_start_to_decoded_ms": {
+          "n": 8640,
+          "min": 7.243732623796234,
+          "median": 9.386453312032387,
+          "p95": 9.993977748610803,
+          "p99": 10.244257581682632,
+          "max": 11.305841170560768,
+          "mean": 9.348816585019762
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 8640,
+          "min": 1.73107823365212,
+          "median": 3.076248771403251,
+          "p95": 3.397546875249214,
+          "p99": 3.567077641496436,
+          "max": 5.010541170560754,
+          "mean": 3.0757654276123545
+        },
+        "ndi_to_decoded_ms": {
+          "n": 8640,
+          "min": 1.4658782336521199,
+          "median": 2.809640805715105,
+          "p95": 3.11748822001573,
+          "p99": 3.2894001137576083,
+          "max": 4.738641170560754,
+          "mean": 2.805623749371614
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 8640,
+          "min": 0.2001,
+          "median": 0.265,
+          "p95": 0.3279,
+          "p99": 0.3761,
+          "max": 0.6171,
+          "mean": 0.27014167824074076
+        },
+        "render_start_to_desktop_update_ms": {
+          "n": 8640,
+          "min": 4.2932,
+          "median": 6.32225,
+          "p95": 6.7458,
+          "p99": 6.9579,
+          "max": 7.477,
+          "mean": 6.273051157407408
+        }
+      },
+      "sender_segments_ms": {
+        "map_wait_ms": {
+          "n": 8640,
+          "min": 0.0964,
+          "median": 0.1467,
+          "p95": 0.18560000000000001,
+          "p99": 0.20809999999999998,
+          "max": 0.522,
+          "mean": 0.14882275462962963
+        },
+        "conversion_ms": {
+          "n": 8640,
+          "min": 0.0515,
+          "median": 0.0582,
+          "p95": 0.07160000000000001,
+          "p99": 0.08600000000000001,
+          "max": 0.20350000000000001,
+          "mean": 0.05996141203703704
+        },
+        "ndi_submit_ms": {
+          "n": 8640,
+          "min": 0.0045000000000000005,
+          "median": 0.0061,
+          "p95": 0.0087,
+          "p99": 0.0112,
+          "max": 0.082,
+          "mean": 0.0062727314814814816
+        }
+      },
+      "total_median_reduction_ms": 2.0804845621373715,
+      "total_median_reduction_percent": 18.143331593553306
+    },
+    "event_nv12__fastest": {
+      "mode": "event_nv12",
+      "receive_color": "fastest",
+      "video": {
+        "width": 640,
+        "height": 640,
+        "fourcc": "UYVY",
+        "rate_n": 144,
+        "rate_d": 1
+      },
+      "trials": [
+        "opt4",
+        "opt7"
+      ],
+      "seconds": 60.0,
+      "received_frames": 8635,
+      "max_clock_uncertainty_ms": 0.3271855,
+      "invalid_markers": 0,
+      "unmatched_frames": 0,
+      "fresh_frames": 8632,
+      "fresh_fps": 143.86666666666667,
+      "received_fps": 143.91666666666666,
+      "first_arrival_ms": {
+        "render_start_to_decoded_ms": {
+          "n": 8632,
+          "min": 7.0275936901012415,
+          "median": 8.979649260550957,
+          "p95": 9.635567978018457,
+          "p99": 9.872122735085838,
+          "max": 15.999256064350448,
+          "mean": 8.956322573956575
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 8632,
+          "min": 1.3651053141241263,
+          "median": 2.6609085232721585,
+          "p95": 3.026484754281364,
+          "p99": 3.1849737769284046,
+          "max": 5.287757952913943,
+          "mean": 2.6584948631132015
+        },
+        "ndi_to_decoded_ms": {
+          "n": 8632,
+          "min": 1.0493053141241262,
+          "median": 2.3283304091364414,
+          "p95": 2.6819991863721953,
+          "p99": 2.8440994597792155,
+          "max": 4.930557952913944,
+          "mean": 2.3271250183495313
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 8632,
+          "min": 0.2609,
+          "median": 0.3253,
+          "p95": 0.3972,
+          "p99": 0.4448,
+          "max": 0.7841,
+          "mean": 0.33136984476367004
+        },
+        "render_start_to_desktop_update_ms": {
+          "n": 8632,
+          "min": 4.3518,
+          "median": 6.3333,
+          "p95": 6.7822,
+          "p99": 6.9837,
+          "max": 12.9985,
+          "mean": 6.297827710843373
+        }
+      },
+      "sender_segments_ms": {
+        "map_wait_ms": {
+          "n": 8632,
+          "min": 0.0975,
+          "median": 0.147,
+          "p95": 0.188,
+          "p99": 0.2155,
+          "max": 0.4111,
+          "mean": 0.14931845458758108
+        },
+        "conversion_ms": {
+          "n": 8632,
+          "min": 0.1078,
+          "median": 0.11739999999999999,
+          "p95": 0.1428,
+          "p99": 0.16799999999999998,
+          "max": 0.5143,
+          "mean": 0.12185026645041705
+        },
+        "ndi_submit_ms": {
+          "n": 8632,
+          "min": 0.0159,
+          "median": 0.0242,
+          "p95": 0.045200000000000004,
+          "p99": 0.0523,
+          "max": 0.14980000000000002,
+          "mean": 0.027529182113067655
+        }
+      },
+      "total_median_reduction_ms": 2.4872886136188015,
+      "total_median_reduction_percent": 21.69095743704715
+    },
+    "direct_bgrx__bgrx": {
+      "mode": "direct_bgrx",
+      "receive_color": "bgrx",
+      "video": {
+        "width": 640,
+        "height": 640,
+        "fourcc": "BGRX",
+        "rate_n": 144,
+        "rate_d": 1
+      },
+      "trials": [
+        "opt10",
+        "opt11"
+      ],
+      "seconds": 60.0,
+      "received_frames": 8634,
+      "max_clock_uncertainty_ms": 0.346341,
+      "invalid_markers": 0,
+      "unmatched_frames": 0,
+      "fresh_frames": 8629,
+      "fresh_fps": 143.81666666666666,
+      "received_fps": 143.9,
+      "first_arrival_ms": {
+        "render_start_to_decoded_ms": {
+          "n": 8629,
+          "min": 6.818100809132318,
+          "median": 9.317056905322545,
+          "p95": 9.998044323761064,
+          "p99": 10.278778836033894,
+          "max": 17.109091986084763,
+          "mean": 9.291893273378006
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 8629,
+          "min": 1.6793024768598488,
+          "median": 3.000150614186966,
+          "p95": 3.3375909013595297,
+          "p99": 3.5120711353453937,
+          "max": 4.809779156697806,
+          "mean": 3.001082715955362
+        },
+        "ndi_to_decoded_ms": {
+          "n": 8629,
+          "min": 1.4585024768598487,
+          "median": 2.796140831848902,
+          "p95": 3.1135181705601553,
+          "p99": 3.2960043030513475,
+          "max": 4.6215791566978055,
+          "mean": 2.792542085523099
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 8629,
+          "min": 0.1414,
+          "median": 0.2039,
+          "p95": 0.2644,
+          "p99": 0.3088,
+          "max": 0.7355,
+          "mean": 0.20854063043226329
+        },
+        "render_start_to_desktop_update_ms": {
+          "n": 8629,
+          "min": 3.772,
+          "median": 6.3243,
+          "p95": 6.8312,
+          "p99": 7.006,
+          "max": 13.6076,
+          "mean": 6.2908105574226445
+        }
+      },
+      "sender_segments_ms": {
+        "map_wait_ms": {
+          "n": 8629,
+          "min": 0.09670000000000001,
+          "median": 0.1478,
+          "p95": 0.18919999999999998,
+          "p99": 0.2188,
+          "max": 0.6713,
+          "mean": 0.1505806582454514
+        },
+        "conversion_ms": {
+          "n": 8629,
+          "min": 0.0,
+          "median": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0,
+          "mean": 0.0
+        },
+        "ndi_submit_ms": {
+          "n": 8629,
+          "min": 0.0056,
+          "median": 0.0086,
+          "p95": 0.0129,
+          "p99": 0.019,
+          "max": 0.0649,
+          "mean": 0.009129632634140688
+        }
+      },
+      "total_median_reduction_ms": 2.1498809688472136,
+      "total_median_reduction_percent": 18.74851850109
+    }
+  },
+  "valid_trials": 10,
+  "valid_measurement_seconds": 300.0,
+  "valid_received_frames": 48955,
+  "recommended_existing_settings": {
+    "backend": "Dxgi",
+    "unlimited": true,
+    "ui_checkbox": "跟随刷新率",
+    "send_pixel": "Nv12",
+    "receiver_color": "BGRX"
+  },
+  "hardware": {
+    "sender_os": "Windows x64",
+    "sender_gpu": "AMD Radeon RX 9070 XT",
+    "receiver_os": "Linux x64",
+    "receiver_cpu": "Intel N100",
+    "ndi_version": "6.3.2",
+    "link_mbps": 2500,
+    "crop": [
+      640,
+      640
+    ],
+    "source_pattern_fps_approx": 144
+  },
+  "method": {
+    "warmup_seconds": 3,
+    "seconds_per_trial": 30,
+    "source_timestamp": "start of Marker.OnPaint before drawing",
+    "receiver_timestamp": "immediately after NDIlib_recv_capture_v3 returns decoded pixels",
+    "clock_calibration": "100 SSH round trips before/after each trial; lowest RTT after five warmup samples, linearly interpolated receiver-minus-sender UTC offset",
+    "fresh_frames": "first arrival of each distinct marker after the initial marker; inverse-bit and signature checks",
+    "direct_buffer": "experimental double-staging mapped-pointer submission, not the production send path"
+  },
+  "limitations": [
+    "Compare BGRX receiver groups for equal output format; fastest returns UYVY and omits YUV-to-RGB conversion/AI preprocessing.",
+    "The direct_bgrx prototype passes a mapped D3D11 staging pointer to NDI, keeps it mapped until NDI finishes, and alternates staging textures. It removes the application CPU pixel copy; GPU readback, encoding, network and decoding remain.",
+    "All groups use the same 640x640 animated marker and no receiver drawing; conclusions apply to this setup.",
+    "Fixed 240 fps includes repeated pixels and delivered about 96 fresh frames/s; event mode followed about 144 desktop updates/s.",
+    "Cross-machine clock uncertainty is recorded per group; differences of a few tenths of a millisecond should not be treated as proven wins.",
+    "First-arrival results cover visual updates delivered to the receiver, not a lossless delivery guarantee for every rendered update."
+  ]
+}

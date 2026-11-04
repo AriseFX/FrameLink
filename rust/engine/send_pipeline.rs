@@ -67,6 +67,12 @@ impl<'a> Stream<'a> {
             Output::Jpeg(sender) => sender.dropped,
         }
     }
+    pub(super) fn last_timecode(&self) -> Option<i64> {
+        match &self.sender {
+            Output::Ndi(_) => Some(self.descriptors[self.descriptor].timecode),
+            Output::Jpeg(_) => None,
+        }
+    }
     pub(super) fn submit(
         &mut self,
         slot: usize,
@@ -81,7 +87,7 @@ impl<'a> Stream<'a> {
         let frame = &mut self.descriptors[self.descriptor];
         frame.data = self.buffers.data(slot);
         frame.rate_n = rate as i32;
-        frame.timecode = timecode();
+        frame.timecode = crate::diagnostics::utc_timecode_100ns();
         // The descriptor alternates even for repeated pixels, so its
         // timecode is never changed while NDI can still be reading it.
         unsafe { sender.submit(frame) };
@@ -96,14 +102,4 @@ pub(super) struct Measurements {
     pub(super) submit: f64,
     pub(super) wait: f64,
     pub(super) count: u64,
-}
-
-fn timecode() -> i64 {
-    #[cfg(windows)]
-    {
-        let time =
-            unsafe { windows::Win32::System::SystemInformation::GetSystemTimePreciseAsFileTime() };
-        let ticks = (u64::from(time.dwHighDateTime) << 32) | u64::from(time.dwLowDateTime);
-        ticks.saturating_sub(116_444_736_000_000_000) as i64
-    }
 }

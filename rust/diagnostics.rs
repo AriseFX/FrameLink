@@ -1,9 +1,21 @@
 //! Optional sender-side traces. These timings never measure receiver latency.
 use serde::Serialize;
+mod options;
+pub use options::SendOptions;
+#[cfg(any(windows, test))]
+mod clock;
+#[cfg(windows)]
+pub(crate) use clock::{SourceTimestamp, source_timestamp, utc_timecode_100ns};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct FrameTiming {
     pub frame: u64,
+    /// Exact NDI timecode for joining a decoded frame; absent for JPEG transports.
+    pub ndi_timecode_100ns: Option<i64>,
+    pub capture_started_100ns: i64,
+    /// DXGI desktop update mapped to Unix UTC, not the age of the cropped content.
+    pub source_present_100ns: Option<i64>,
+    pub source_clock_uncertainty_100ns: Option<u64>,
     pub refreshed: bool,
     pub desktop_updated: bool,
     pub release_ms: f64,
@@ -192,6 +204,10 @@ mod statistics {
         fn sample(frame: u64) -> FrameTiming {
             FrameTiming {
                 frame,
+                ndi_timecode_100ns: Some(frame as i64),
+                capture_started_100ns: 0,
+                source_present_100ns: None,
+                source_clock_uncertainty_100ns: None,
                 refreshed: true,
                 desktop_updated: true,
                 release_ms: 0.5,
@@ -318,7 +334,7 @@ mod windows_sender {
     #[derive(Serialize)]
     struct Report {
         scope: &'static str,
-        excluded: [&'static str; 5],
+        excluded: [&'static str; 4],
         notes: Vec<&'static str>,
         measurement_succeeded: bool,
         final_phase: Phase,
@@ -362,7 +378,11 @@ mod windows_sender {
         }
     }
 
-    pub(super) fn measure_send(seconds: f64, output: &Path) -> Result<(), String> {
+    pub(super) fn measure_send(
+        seconds: f64,
+        output: &Path,
+        options: &super::SendOptions,
+    ) -> Result<(), String> {
         let limit = duration(seconds)?;
         let (mut config, settings_warning) = settings::load();
         let displays = monitors()?;
@@ -384,6 +404,7 @@ mod windows_sender {
         }
         config.preview = false;
         config.diagnostics = true;
+        options.apply(&mut config)?;
         config.validate()?;
 
         let mut engine = Engine::new();
@@ -450,6 +471,7 @@ mod windows_sender {
             "Desktop age percentiles include only desktop_updated samples with a known age. Static-desktop repeats and pointer-only updates are excluded from those percentiles.",
             "The legacy ndi_submit_ms field measures the selected transport submission, including possible backpressure. It does not prove receiver delivery or decoding time.",
             "Diagnostic tracing adds timing and status collection overhead. Compare runs with the same diagnostics mode and configuration.",
+            "NDI timecodes and capture timestamps use Unix UTC in 100 ns units. source_present_100ns maps DXGI LastPresentTime to UTC with a bracketed QPC observation; its local pairing uncertainty is recorded separately. Cross-host clock calibration is still required.",
         ];
         if config.transport != crate::model::Transport::Ndi {
             notes.push("TCP sends concatenated JPEG images; UDP sends one complete JPEG per datagram. conversion_ms includes JPEG encoding for changed frames. TCP connection count is not a delivery acknowledgement; UDP reports -1 (unknown). dropped counts only local abandoned UDP frames, not network loss.");
@@ -468,7 +490,6 @@ mod windows_sender {
                 "network_latency",
                 "receiver_decode",
                 "inference",
-                "KMBox",
                 "end_to_end_latency",
             ],
             notes,
@@ -517,5 +538,15 @@ mod windows_sender {
 /// Run a Windows sender session without changing the saved GUI configuration.
 #[cfg(windows)]
 pub fn measure_send(seconds: f64, output: &std::path::Path) -> Result<(), String> {
-    windows_sender::measure_send(seconds, output)
+    measure_send_with_options(seconds, output, &SendOptions::default())
+}
+
+/// Apply diagnostic-only overrides without saving the user's settings.
+#[cfg(windows)]
+pub fn measure_send_with_options(
+    seconds: f64,
+    output: &std::path::Path,
+    options: &SendOptions,
+) -> Result<(), String> {
+    windows_sender::measure_send(seconds, output, options)
 }

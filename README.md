@@ -41,6 +41,8 @@ FrameLink 是一款 Windows 屏幕区域推流应用，可通过 NDI、TCP 或 U
 
 FrameLink 当前发送 SDR 8 位视频，不包含音频。参数说明、托盘操作和常见问题见[使用说明](docs/使用说明.md)。
 
+用于图像处理或识别时，建议选择 **DXGI、跟随刷新率和 NV12**。跟随刷新率按桌面更新发送，避免固定高帧率反复发送相同画面。测量口径、对照数据和复测步骤见[延迟测试](docs/延迟测试.md)。
+
 ## 从源码构建
 
 需要 Rust 1.88+（MSVC 工具链）、Visual Studio 2022 C++ Build Tools 和 Windows SDK。
@@ -60,6 +62,7 @@ cargo build --locked --release --target x86_64-pc-windows-msvc --bin FrameLink
 - [使用说明](docs/使用说明.md)：采集、发送、网卡、设置和常见问题。
 - [传输协议](docs/传输协议.md)：TCP / UDP 数据格式、接收示例和连接行为。
 - [开发说明](docs/开发说明.md)：构建打包、模块结构、测试和诊断。
+- [延迟测试](docs/延迟测试.md)：接收端像素内存延迟、帧率对照和测量工具。
 
 提交问题时，请附上 FrameLink 版本、Windows 版本、所用协议和复现步骤；与采集有关的问题也请注明显示器分辨率、缩放比例和采集方式。
 

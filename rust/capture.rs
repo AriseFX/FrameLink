@@ -791,6 +791,20 @@ impl Capture {
         let age = now.checked_sub(presented)?;
         (age >= 0).then(|| age as f64 * 1000.0 / frequency as f64)
     }
+
+    /// Diagnostic UTC estimate of the last whole-desktop update, with local pairing error.
+    pub(crate) fn source_timestamp(&self) -> Option<crate::diagnostics::SourceTimestamp> {
+        let CaptureInner::Dxgi(capture) = &self.inner else {
+            return None;
+        };
+        let presented = capture.diagnostics.last_present_qpc?;
+        let frequency = capture.qpc_frequency?;
+        let (mut before, mut after) = (0, 0);
+        unsafe { QueryPerformanceCounter(&mut before) }.ok()?;
+        let utc = crate::diagnostics::utc_timecode_100ns();
+        unsafe { QueryPerformanceCounter(&mut after) }.ok()?;
+        crate::diagnostics::source_timestamp(presented, frequency, before, after, utc)
+    }
 }
 
 #[path = "capture/picker.rs"]
