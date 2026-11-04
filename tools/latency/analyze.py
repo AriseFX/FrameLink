@@ -193,9 +193,9 @@ def main():
         **summarize(rows, args.marker),
         "notes": [
             "All latency units are milliseconds; sender timecodes are Unix UTC in 100 ns units.",
-            "Source desktop timestamp describes the entire monitor, not only the cropped content.",
+            "Source timestamp is the whole-monitor DXGI timestamp of the update copied into the crop; outside-only updates retain the previous crop timestamp.",
             "The initial update is omitted from first-arrival statistics because it may have arrived during warmup.",
-            "Desktop updates are identified from sender refresh events; changes outside the crop can produce new desktop updates without changing cropped pixels.",
+            "Updates are identified from sender refresh events. Older builds copy every desktop update; region-aware builds skip updates proven to be outside the crop. Coalesced dirty rectangles can still trigger a copy of unchanged pixels.",
             "First-arrival statistics describe delivered updates. A null primary latency means no eligible new desktop updates were measured.",
             "Primary latency excludes source application drawing and desktop composition before LastPresentTime.",
             "Cross-host calibration assumes no intermediate clock steps. Negative samples require investigation.",

@@ -110,6 +110,20 @@ impl FrameBuffers {
         {
             return Err("NV12读取缓冲区长度或行距无效".into());
         }
+        let dst = &mut self.pixels[slot];
+        let length = dst.len();
+        if stride == self.width && length <= 256 * 1024 {
+            dst.copy_from_slice(&src[..length]);
+            return Ok(());
+        }
+        if stride == self.width && dst.len() >= 2 * 1024 * 1024 {
+            // Bounded copies avoid the slower large-copy path seen with mapped
+            // GPU readback memory, without returning to one call per row.
+            for (output, input) in dst.chunks_mut(64 * 1024).zip(src.chunks(64 * 1024)) {
+                output.copy_from_slice(&input[..output.len()]);
+            }
+            return Ok(());
+        }
         for (y, row) in self.pixels[slot].chunks_exact_mut(self.width).enumerate() {
             row.copy_from_slice(&src[y * stride..y * stride + self.width]);
         }
@@ -196,6 +210,34 @@ mod tests {
                 .copy_nv12(0, &src, 4)
                 .is_err()
         );
+    }
+    #[test]
+    fn tight_nv12_readback_preserves_pixels_slots_and_final_partial_chunk() {
+        for (w, h) in [
+            (2, 2),
+            (416, 416),
+            (512, 512),
+            (640, 640),
+            (1280, 1280),
+            (1920, 1080),
+        ] {
+            let mut buffers = FrameBuffers::new(w, h, PixelFormat::Nv12).unwrap();
+            let len = buffers.bytes(0).len();
+            let source: Vec<u8> = (0..len + 17)
+                .map(|i| (i.wrapping_mul(37) ^ (i >> 5)) as u8)
+                .collect();
+            let pointers = [buffers.data(0), buffers.data(1)];
+            buffers.copy_nv12(1, &source, w as usize).unwrap();
+            assert_eq!(buffers.bytes(1), &source[..len]);
+            assert!(buffers.bytes(0).iter().all(|&byte| byte == 0));
+            assert!(
+                buffers
+                    .copy_nv12(0, &source[..len - 1], w as usize)
+                    .is_err()
+            );
+            assert!(buffers.bytes(0).iter().all(|&byte| byte == 0));
+            assert_eq!(pointers, [buffers.data(0), buffers.data(1)]);
+        }
     }
     #[test]
     fn square_capture_preserves_the_original_color_matrix() {

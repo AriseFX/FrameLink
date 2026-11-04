@@ -5,7 +5,7 @@ param(
         if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '../FrameLink.exe')) {
             Join-Path $PSScriptRoot '../FrameLink.exe'
         } else {
-            Join-Path $PSScriptRoot '../dist/FrameLink-3.1.5-dev-Windows-x64/FrameLink.exe'
+            Join-Path $PSScriptRoot '../dist/FrameLink-3.1.6-dev-Windows-x64/FrameLink.exe'
         }
     ),
     [ValidateRange(3, 60)][int]$TimeoutSeconds = 15,

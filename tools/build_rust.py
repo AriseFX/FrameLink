@@ -87,6 +87,8 @@ def main():
                      (root / "docs/validation/ndi-fixed-fps-2026-11-04.json", "docs/validation/ndi-fixed-fps-2026-11-04.json"),
                      (root / "docs/validation/ndi-latency-2026-11-04.json", "docs/validation/ndi-latency-2026-11-04.json"),
                      (root / "docs/validation/ndi-gpu-nv12-2026-11-04.json", "docs/validation/ndi-gpu-nv12-2026-11-04.json"),
+                     (root / "docs/validation/ndi-scheduling-2026-11-04.json", "docs/validation/ndi-scheduling-2026-11-04.json"),
+                     (root / "docs/validation/ndi-optimization-2026-11-04.json", "docs/validation/ndi-optimization-2026-11-04.json"),
                      (root / "docs/传输协议.md", "docs/传输协议.md"),
                      (root / "tests/SingleInstanceVerification.ps1", "tests/SingleInstanceVerification.ps1"))
     for source, _ in package_files:

@@ -357,8 +357,11 @@ impl Drop for Dib {
 
 #[path = "capture/gpu_nv12.rs"]
 mod gpu_nv12;
+#[path = "capture/region_changes.rs"]
+mod region_changes;
 
 struct DxgiCapture {
+    changes: Box<region_changes::RegionChanges>,
     gpu: Option<gpu_nv12::GpuNv12>,
     gpu_fallback: Option<String>,
     held_frame: Option<FrameLease<DxgiFrame>>,
@@ -496,6 +499,7 @@ impl DxgiCapture {
                     }
                     return Ok(Self {
                         gpu,
+                        changes: Box::default(),
                         gpu_fallback,
                         held_frame: None,
                         context,
@@ -567,7 +571,21 @@ impl DxgiCapture {
                 if self.cursor && info.PointerShapeBufferSize > 0 {
                     changed = true;
                 }
-                if info.LastPresentTime != 0 || !self.has_image {
+                let crop = RECT {
+                    left: self.region.x - self.bounds.left,
+                    top: self.region.y - self.bounds.top,
+                    right: self.region.x - self.bounds.left + self.region.width as i32,
+                    bottom: self.region.y - self.bounds.top + self.region.height as i32,
+                };
+                let refresh = !self.has_image
+                    || (info.LastPresentTime != 0
+                        && (self.cursor
+                            || self.changes.affects(
+                                &self.duplication,
+                                crop,
+                                info.TotalMetadataBufferSize,
+                            )));
+                if refresh {
                     let resource = resource
                         .ok_or_else(|| CaptureError::Fatal("桌面复制没有返回帧资源".into()))?;
                     let texture: ID3D11Texture2D =
@@ -604,12 +622,12 @@ impl DxgiCapture {
                     }
                     self.has_image = true;
                     changed = true;
+                    if info.LastPresentTime > 0 {
+                        self.diagnostics.last_present_qpc = Some(info.LastPresentTime);
+                    }
                 }
                 self.diagnostics.accumulated_frames = info.AccumulatedFrames;
                 self.diagnostics.desktop_updated = info.LastPresentTime != 0;
-                if info.LastPresentTime > 0 {
-                    self.diagnostics.last_present_qpc = Some(info.LastPresentTime);
-                }
                 // Early errors release the local lease; successful acquisition
                 // keeps it alive through readback, submission and frame pacing.
                 self.held_frame = Some(frame);
@@ -824,7 +842,8 @@ impl Capture {
         (age >= 0).then(|| age as f64 * 1000.0 / frequency as f64)
     }
 
-    /// Diagnostic UTC estimate of the last whole-desktop update, with local pairing error.
+    /// Diagnostic UTC estimate of the desktop update last copied into the crop.
+    /// Updates outside the crop must not make retained pixels appear newer.
     pub(crate) fn source_timestamp(&self) -> Option<crate::diagnostics::SourceTimestamp> {
         let CaptureInner::Dxgi(capture) = &self.inner else {
             return None;

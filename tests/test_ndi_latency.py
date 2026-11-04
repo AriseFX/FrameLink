@@ -62,6 +62,19 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(result["updates_after_initial_sample"], 0)
         self.assertIsNone(result["primary_latency_ms"])
 
+    def test_outside_crop_updates_do_not_reset_the_retained_frame_identity(self):
+        sender, receiver = self.inputs()
+        # Desktop changes outside the crop are acquired but do not replace pixels.
+        sender[1].update(desktop_updated=True, refreshed=False,
+                         source_present_100ns=sender[0]["source_present_100ns"])
+        sender[3].update(desktop_updated=True, refreshed=False,
+                         source_present_100ns=sender[2]["source_present_100ns"])
+        rows = join_frames(sender, receiver, ClockCorrection())
+        self.assertEqual([row["desktop_update_frame"] for row in rows], [1, 1, 3, 3])
+        self.assertEqual([row["first_arrival_of_update"] for row in rows], [False, False, True, False])
+        self.assertEqual(rows[1]["desktop_update_to_decoded_ms"], 9)
+        self.assertEqual(summarize(rows)["updates_after_initial_sample"], 1)
+
     def test_receiver_minus_sender_offset_is_subtracted_with_drift(self):
         clock = ClockCorrection(self.calibration(9_000_000_000, 1000), self.calibration(11_000_000_000, 1002))
         sender, receiver = self.inputs()

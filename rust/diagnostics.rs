@@ -13,7 +13,8 @@ pub struct FrameTiming {
     /// Exact NDI timecode for joining a decoded frame; absent for JPEG transports.
     pub ndi_timecode_100ns: Option<i64>,
     pub capture_started_100ns: i64,
-    /// DXGI desktop update mapped to Unix UTC, not the age of the cropped content.
+    /// DXGI timestamp of the update last copied into the crop, mapped to UTC.
+    /// Coalesced dirty rectangles can still include pixels that did not change.
     pub source_present_100ns: Option<i64>,
     pub source_clock_uncertainty_100ns: Option<u64>,
     pub refreshed: bool,
@@ -187,13 +188,13 @@ mod statistics {
             desktop_age_before_submit_ms: distribution(
                 samples
                     .iter()
-                    .filter(|sample| sample.desktop_updated)
+                    .filter(|sample| sample.desktop_updated && sample.refreshed)
                     .filter_map(|sample| sample.desktop_age_before_submit_ms),
             ),
             desktop_age_after_submit_ms: distribution(
                 samples
                     .iter()
-                    .filter(|sample| sample.desktop_updated)
+                    .filter(|sample| sample.desktop_updated && sample.refreshed)
                     .filter_map(|sample| sample.desktop_age_after_submit_ms),
             ),
         }
@@ -300,8 +301,12 @@ mod statistics {
             let mut unknown = sample(4);
             unknown.desktop_age_before_submit_ms = None;
             unknown.desktop_age_after_submit_ms = None;
-            let summary = summarize(&[first, repeated, cursor_only, unknown]);
-            assert_eq!(summary.acquire_ms.samples, 4);
+            let mut outside_crop = sample(5);
+            outside_crop.refreshed = false;
+            outside_crop.desktop_age_before_submit_ms = Some(400.0);
+            outside_crop.desktop_age_after_submit_ms = Some(500.0);
+            let summary = summarize(&[first, repeated, cursor_only, unknown, outside_crop]);
+            assert_eq!(summary.acquire_ms.samples, 5);
             assert_eq!(summary.desktop_age_before_submit_ms.samples, 1);
             assert_eq!(summary.desktop_age_before_submit_ms.p99_ms, Some(5.0));
             assert_eq!(summary.desktop_age_after_submit_ms.p99_ms, Some(6.0));
@@ -471,8 +476,8 @@ mod windows_sender {
         let receiver_observed = maximum_observed_receivers > 0;
         let mut notes = vec![
             "All frame counts and traces cover this sender session, including frames sent before the first active sender status was observed and during shutdown.",
-            "Desktop age uses the local Windows QPC clock and DXGI LastPresentTime. It describes desktop presentation age, not ROI content age or end-to-end latency.",
-            "Desktop age percentiles include only desktop_updated samples with a known age. Static-desktop repeats and pointer-only updates are excluded from those percentiles.",
+            "Desktop age uses local Windows QPC and the DXGI LastPresentTime of the update copied into the crop. Updates outside the crop retain the previous timestamp. Coalesced metadata can still refresh unchanged pixels; this is not end-to-end latency.",
+            "Desktop age percentiles require desktop_updated, refreshed and a known age. Repeated pixels, outside-only updates and pointer-only updates are excluded from those percentiles.",
             "The legacy ndi_submit_ms field measures the selected transport submission, including possible backpressure. It does not prove receiver delivery or decoding time.",
             "Diagnostic tracing adds timing and status collection overhead. Compare runs with the same diagnostics mode and configuration.",
             "NDI timecodes and capture timestamps use Unix UTC in 100 ns units. source_present_100ns maps DXGI LastPresentTime to UTC with a bracketed QPC observation; its local pairing uncertainty is recorded separately. Cross-host clock calibration is still required.",
