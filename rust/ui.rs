@@ -723,12 +723,21 @@ impl DesktopApp {
                             ui.add_space(8.0);
                             ui.checkbox(&mut self.config.cursor, "包含鼠标指针");
 
+                            let gpu_available = self.config.supports_gpu_nv12();
+                            ui.add_enabled(gpu_available, egui::Checkbox::new(
+                                &mut self.config.gpu_nv12, "GPU NV12 转换（实验性）"))
+                                .on_hover_text("在显卡上转换后读取画面。仅用于 DXGI、NDI NV12 且不合成鼠标时；不可用时自动使用 CPU。小尺寸收益有限，默认关闭。");
+
                             ui.checkbox(&mut self.config.precision, "精确帧间调度")
                                 .on_hover_text(
                                     "提高调度精度，但会增加 CPU 占用。建议先使用默认设置。",
                                 );
                         });
 
+                        if running && self.config.gpu_nv12 {
+                            ui.label(RichText::new(format!("当前采集：{}", self.stats.backend))
+                                .size(11.0).color(MUTED));
+                        }
                         ui.checkbox(&mut self.config.close_to_tray, "关闭窗口时收起到托盘");
                     });
             });

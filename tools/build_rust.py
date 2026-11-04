@@ -86,11 +86,15 @@ def main():
                      (root / "docs/延迟测试.md", "docs/延迟测试.md"),
                      (root / "docs/validation/ndi-fixed-fps-2026-11-04.json", "docs/validation/ndi-fixed-fps-2026-11-04.json"),
                      (root / "docs/validation/ndi-latency-2026-11-04.json", "docs/validation/ndi-latency-2026-11-04.json"),
+                     (root / "docs/validation/ndi-gpu-nv12-2026-11-04.json", "docs/validation/ndi-gpu-nv12-2026-11-04.json"),
                      (root / "docs/传输协议.md", "docs/传输协议.md"),
                      (root / "tests/SingleInstanceVerification.ps1", "tests/SingleInstanceVerification.ps1"))
     for source, _ in package_files:
         if not source.is_file():
             parser.error(f"Missing package input: {source}")
+    output_root = args.output_dir.expanduser().resolve()
+    if package.resolve().parent != output_root or package.is_symlink():
+        raise RuntimeError("Package directory must stay directly inside the output directory")
     if package.exists():
         shutil.rmtree(package)
     package.mkdir(parents=True)
@@ -119,7 +123,7 @@ def main():
             dest.mkdir(parents=True, exist_ok=True)
             shutil.copy2(notice, dest / notice.name)
     (licenses / "rust-dependencies.json").write_text(json.dumps(inventory, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-    source_files = sorted([*root.glob("rust/**/*.rs"), root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml", *root.glob("resources/*"), root / "tools/build_rust.py", root / "tests/SingleInstanceVerification.ps1"])
+    source_files = sorted([*root.glob("rust/**/*.rs"), *root.glob("rust/**/*.hlsl"), root / "Cargo.toml", root / "Cargo.lock", root / ".cargo/config.toml", *root.glob("resources/*"), root / "tools/build_rust.py", root / "tests/SingleInstanceVerification.ps1"])
     compiler = subprocess.check_output(["rustc", "-vV"], text=True)
     host_target = next(line.removeprefix("host: ") for line in compiler.splitlines() if line.startswith("host: "))
     info = {"product": "FrameLink 帧连", "version": version, "target": args.target, "build_host": platform.platform(),

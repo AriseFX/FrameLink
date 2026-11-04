@@ -86,6 +86,8 @@ pub struct Config {
     pub fps: u32,
     pub backend: Backend,
     pub pixel: PixelFormat,
+    /// Opt-in conversion on the capture GPU; incompatible capture modes use CPU.
+    pub gpu_nv12: bool,
     pub cursor: bool,
     pub precision: bool,
     pub preview: bool,
@@ -113,6 +115,7 @@ impl Default for Config {
             fps: 300,
             backend: Backend::Auto,
             pixel: PixelFormat::Nv12,
+            gpu_nv12: false,
             cursor: false,
             precision: false,
             preview: false,
@@ -177,6 +180,12 @@ impl Config {
         } else {
             PixelFormat::Bgrx
         }
+    }
+    pub fn supports_gpu_nv12(&self) -> bool {
+        self.transport == Transport::Ndi
+            && self.pixel == PixelFormat::Nv12
+            && self.backend != Backend::Gdi
+            && !self.cursor
     }
     pub fn select_monitor(&mut self, monitor: &Monitor) -> Result<(), String> {
         let region = if let Some(size) = self.preset {
@@ -268,5 +277,30 @@ mod tests {
         c.fps = 240;
         c.name = "bad\0name".into();
         assert!(c.validate().is_err());
+    }
+    #[test]
+    fn gpu_preference_survives_modes_that_require_cpu_conversion() {
+        let mut c = Config::default();
+        assert!(!c.gpu_nv12);
+        assert!(c.supports_gpu_nv12());
+        c.gpu_nv12 = true;
+        c.preview = true;
+        assert!(c.supports_gpu_nv12());
+        c.cursor = true;
+        assert!(!c.supports_gpu_nv12());
+        c.cursor = false;
+        c.backend = Backend::Gdi;
+        assert!(!c.supports_gpu_nv12());
+        c.backend = Backend::Dxgi;
+        c.pixel = PixelFormat::Bgrx;
+        assert!(!c.supports_gpu_nv12());
+        c.pixel = PixelFormat::Nv12;
+        c.transport = Transport::Tcp;
+        assert!(!c.supports_gpu_nv12());
+        let saved = toml::to_string(&c).unwrap();
+        let restored: Config = toml::from_str(&saved).unwrap();
+        assert!(restored.gpu_nv12);
+        assert!(restored.validate().is_ok());
+        assert!(toml::from_str::<Config>("").is_ok_and(|old| !old.gpu_nv12));
     }
 }

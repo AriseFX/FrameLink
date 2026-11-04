@@ -355,7 +355,12 @@ impl Drop for Dib {
     }
 }
 
+#[path = "capture/gpu_nv12.rs"]
+mod gpu_nv12;
+
 struct DxgiCapture {
+    gpu: Option<gpu_nv12::GpuNv12>,
+    gpu_fallback: Option<String>,
     held_frame: Option<FrameLease<DxgiFrame>>,
     context: ID3D11DeviceContext,
     staging: ID3D11Texture2D,
@@ -473,7 +478,22 @@ impl DxgiCapture {
                         .map_err(|e| error("创建区域读取纹理", e))?;
                     let staging = staging
                         .ok_or_else(|| CaptureError::Fatal("D3D11没有返回读取纹理".into()))?;
+                    let (gpu, gpu_fallback) = if config.gpu_nv12 && config.supports_gpu_nv12() {
+                        match gpu_nv12::GpuNv12::new(
+                            &device,
+                            config.region.width,
+                            config.region.height,
+                        ) {
+                            Ok(gpu) => (Some(gpu), None),
+                            Err(error @ CaptureError::Recoverable(_)) => return Err(error),
+                            Err(error) => (None, Some(error.to_string())),
+                        }
+                    } else {
+                        (None, None)
+                    };
                     return Ok(Self {
+                        gpu,
+                        gpu_fallback,
                         held_frame: None,
                         context,
                         staging,
@@ -559,17 +579,21 @@ impl DxgiCapture {
                         bottom: y + self.region.height,
                         back: 1,
                     };
-                    unsafe {
-                        self.context.CopySubresourceRegion(
-                            &self.staging,
-                            0,
-                            0,
-                            0,
-                            0,
-                            &texture,
-                            0,
-                            Some(&area),
-                        );
+                    if let Some(gpu) = &self.gpu {
+                        gpu.capture(&self.context, &texture, &area);
+                    } else {
+                        unsafe {
+                            self.context.CopySubresourceRegion(
+                                &self.staging,
+                                0,
+                                0,
+                                0,
+                                0,
+                                &texture,
+                                0,
+                                Some(&area),
+                            );
+                        }
                     }
                     self.has_image = true;
                     changed = true;
@@ -600,6 +624,11 @@ impl DxgiCapture {
     ) -> Result<T, CaptureError> {
         if !self.has_image {
             return Err(CaptureError::Fatal("尚无可读取的桌面帧".into()));
+        }
+        // Read BGRA only when the independent preview requests it. The GPU crop
+        // remains valid even when the desktop has not changed since last time.
+        if let Some(gpu) = &self.gpu {
+            gpu.copy_bgra(&self.context, &self.staging);
         }
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         let map_started = self.diagnostics_enabled.then(Instant::now);
@@ -736,6 +765,38 @@ impl Capture {
     }
     pub fn is_dxgi(&self) -> bool {
         matches!(self.inner, CaptureInner::Dxgi(_))
+    }
+    pub fn uses_gpu_nv12(&self) -> bool {
+        matches!(&self.inner, CaptureInner::Dxgi(c) if c.gpu.is_some())
+    }
+    pub fn backend_label(&self) -> String {
+        match &self.inner {
+            CaptureInner::Dxgi(c) if c.gpu.is_some() => "DXGI · GPU NV12".into(),
+            CaptureInner::Dxgi(c) if c.gpu_fallback.is_some() => {
+                format!(
+                    "DXGI · CPU NV12（GPU不可用：{}）",
+                    c.gpu_fallback.as_deref().unwrap_or_default()
+                )
+            }
+            CaptureInner::Dxgi(_) => "DXGI".into(),
+            CaptureInner::Gdi { .. } => "GDI".into(),
+        }
+    }
+    pub fn with_nv12<T>(
+        &mut self,
+        callback: impl FnOnce(&[u8], usize) -> T,
+    ) -> Result<T, CaptureError> {
+        let CaptureInner::Dxgi(c) = &mut self.inner else {
+            return Err(CaptureError::Fatal("NV12 GPU读取需要DXGI采集".into()));
+        };
+        if !c.has_image {
+            return Err(CaptureError::Fatal("尚无可读取的桌面帧".into()));
+        }
+        let gpu = c
+            .gpu
+            .as_ref()
+            .ok_or_else(|| CaptureError::Fatal("GPU转换尚未初始化".into()))?;
+        gpu.read(&c.context, &mut c.diagnostics.map_wait_ms, callback)
     }
     pub fn diagnostics(&self) -> CaptureDiagnostics {
         match &self.inner {

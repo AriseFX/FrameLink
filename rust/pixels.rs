@@ -98,6 +98,23 @@ impl FrameBuffers {
     pub fn data(&self, slot: usize) -> *const u8 {
         self.pixels[slot].as_ptr()
     }
+    /// Copy GPU readback into the inactive, stable NDI buffer; strip row padding.
+    pub fn copy_nv12(&mut self, slot: usize, src: &[u8], stride: usize) -> Result<(), String> {
+        let rows = self.height + self.height / 2;
+        let needed = (rows - 1)
+            .checked_mul(stride)
+            .and_then(|n| n.checked_add(self.width));
+        if self.format != PixelFormat::Nv12
+            || stride < self.width
+            || needed.is_none_or(|needed| src.len() < needed)
+        {
+            return Err("NV12读取缓冲区长度或行距无效".into());
+        }
+        for (y, row) in self.pixels[slot].chunks_exact_mut(self.width).enumerate() {
+            row.copy_from_slice(&src[y * stride..y * stride + self.width]);
+        }
+        Ok(())
+    }
     pub fn convert(&mut self, slot: usize, src: &[u8], stride: usize) -> Result<(), String> {
         validate_bgra(src, stride, self.width, self.height)?;
         let dst = &mut self.pixels[slot];
@@ -193,6 +210,26 @@ mod tests {
         assert!(frame_len(513, 512, PixelFormat::Nv12).is_err());
         assert!(frame_len(512, 511, PixelFormat::Nv12).is_err());
         assert!(frame_len(32768, 32768, PixelFormat::Bgrx).is_err());
+    }
+    #[test]
+    fn nv12_readback_strips_padding_without_reallocating_or_touching_inflight_slot() {
+        let mut buffers = FrameBuffers::new(2, 2, PixelFormat::Nv12).unwrap();
+        let pointers = [buffers.data(0), buffers.data(1)];
+        let src = [16, 235, 99, 99, 81, 145, 99, 99, 128, 128];
+        buffers.copy_nv12(1, &src, 4).unwrap();
+        assert_eq!(buffers.bytes(1), [16, 235, 81, 145, 128, 128]);
+        assert_eq!(buffers.bytes(0), [0; 6]);
+        assert_eq!(pointers, [buffers.data(0), buffers.data(1)]);
+        assert!(buffers.copy_nv12(0, &src[..9], 4).is_err());
+        assert!(buffers.copy_nv12(0, &src, 1).is_err());
+        assert!(buffers.copy_nv12(0, &src, usize::MAX).is_err());
+        assert_eq!(buffers.bytes(0), [0; 6]);
+        assert!(
+            FrameBuffers::new(2, 2, PixelFormat::Bgrx)
+                .unwrap()
+                .copy_nv12(0, &src, 4)
+                .is_err()
+        );
     }
     #[test]
     fn square_capture_preserves_the_original_color_matrix() {

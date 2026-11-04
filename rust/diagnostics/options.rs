@@ -6,6 +6,7 @@ use crate::model::{Config, Transport};
 pub struct SendOptions {
     fps: Option<u32>,
     pixel: Option<PixelFormat>,
+    gpu_nv12: Option<bool>,
 }
 
 impl SendOptions {
@@ -14,6 +15,16 @@ impl SendOptions {
         let mut args = args.iter();
         while let Some(arg) = args.next() {
             match arg.as_str() {
+                "--conversion" => {
+                    if options.gpu_nv12.is_some() {
+                        return Err("--conversion 不能重复指定".into());
+                    }
+                    options.gpu_nv12 = Some(match args.next().map(String::as_str) {
+                        Some("cpu") => false,
+                        Some("gpu") => true,
+                        _ => return Err("--conversion 需要 cpu 或 gpu".into()),
+                    });
+                }
                 "--fps" => {
                     if options.fps.is_some() {
                         return Err("--fps 不能重复指定".into());
@@ -55,6 +66,12 @@ impl SendOptions {
         if let Some(fps) = self.fps {
             config.fps = fps;
         }
+        if let Some(gpu) = self.gpu_nv12 {
+            if gpu && !config.supports_gpu_nv12() {
+                return Err("GPU转换诊断需要NDI NV12、DXGI或自动采集，并关闭鼠标合成".into());
+            }
+            config.gpu_nv12 = gpu;
+        }
         Ok(())
     }
 }
@@ -81,6 +98,39 @@ mod tests {
         assert_eq!(run.fps, 120);
         assert_eq!(saved.fps, 300);
         assert_eq!(saved.pixel, PixelFormat::Nv12);
+    }
+    #[test]
+    fn conversion_override_is_temporary_and_rejects_incompatible_gpu_requests() {
+        let mut run = Config::default();
+        parse(&["--conversion", "gpu"])
+            .unwrap()
+            .apply(&mut run)
+            .unwrap();
+        assert!(run.gpu_nv12);
+        parse(&[]).unwrap().apply(&mut run).unwrap();
+        assert!(run.gpu_nv12);
+        parse(&["--conversion", "cpu"])
+            .unwrap()
+            .apply(&mut run)
+            .unwrap();
+        assert!(!run.gpu_nv12);
+        run.cursor = true;
+        assert!(
+            parse(&["--conversion", "gpu"])
+                .unwrap()
+                .apply(&mut run)
+                .is_err()
+        );
+        run.cursor = false;
+        assert!(
+            parse(&["--conversion", "gpu", "--pixel", "bgrx"])
+                .unwrap()
+                .apply(&mut run)
+                .is_err()
+        );
+        assert!(parse(&["--conversion", "unknown"]).is_err());
+        assert!(parse(&["--conversion"]).is_err());
+        assert!(parse(&["--conversion", "cpu", "--conversion", "gpu"]).is_err());
     }
     #[test]
     fn rejects_ambiguous_or_invalid_overrides() {

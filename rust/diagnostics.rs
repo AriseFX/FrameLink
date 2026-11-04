@@ -17,6 +17,8 @@ pub struct FrameTiming {
     pub source_present_100ns: Option<i64>,
     pub source_clock_uncertainty_100ns: Option<u64>,
     pub refreshed: bool,
+    /// Actual capture path, including automatic CPU fallback and repeated frames.
+    pub gpu_conversion: bool,
     pub desktop_updated: bool,
     pub release_ms: f64,
     pub acquire_ms: f64,
@@ -209,6 +211,7 @@ mod statistics {
                 source_present_100ns: None,
                 source_clock_uncertainty_100ns: None,
                 refreshed: true,
+                gpu_conversion: false,
                 desktop_updated: true,
                 release_ms: 0.5,
                 acquire_ms: 1.0,
@@ -354,6 +357,7 @@ mod windows_sender {
         backend: String,
         ndi_version: String,
         frames: u64,
+        gpu_path_frames: usize,
         repeats: u64,
         dropped: u64,
         receiver_observed: bool,
@@ -476,6 +480,9 @@ mod windows_sender {
         if config.transport != crate::model::Transport::Ndi {
             notes.push("TCP sends concatenated JPEG images; UDP sends one complete JPEG per datagram. conversion_ms includes JPEG encoding for changed frames. TCP connection count is not a delivery acknowledgement; UDP reports -1 (unknown). dropped counts only local abandoned UDP frames, not network loss.");
         }
+        if config.gpu_nv12 {
+            notes.push("gpu_conversion records the actual per-frame path; GPU preference can fall back to CPU. gpu_path_frames includes repeats. With GPU conversion, map_wait_ms includes waiting for conversion and NV12 readback; conversion_ms is only the CPU copy into stable NDI buffers. Compare capture-to-submit or desktop age, not conversion_ms alone.");
+        }
         if !receiver_observed {
             notes.push(
                 "No receiver connection was observed (UDP has no acknowledgement). Confirm delivery separately at the receiver.",
@@ -515,6 +522,11 @@ mod windows_sender {
             backend: stats.backend,
             ndi_version: stats.ndi_version,
             frames: stats.frames,
+            gpu_path_frames: trace
+                .samples
+                .iter()
+                .filter(|sample| sample.gpu_conversion)
+                .count(),
             repeats: stats.repeats,
             dropped: stats.dropped,
             receiver_observed,

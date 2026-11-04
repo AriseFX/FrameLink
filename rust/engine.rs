@@ -316,10 +316,11 @@ mod windows_worker {
         fn dxgi(&mut self, config: &Config, shared: &Shared) -> Result<(), String> {
             match Capture::dxgi(config) {
                 Ok(capture) => {
+                    let backend = capture.backend_label();
                     self.capture = Some(capture);
                     self.retry.recovered();
                     shared.stats(|s| {
-                        s.backend = "DXGI".into();
+                        s.backend = backend;
                         s.phase = Phase::Sending;
                     });
                     Ok(())
@@ -484,12 +485,21 @@ mod windows_worker {
                 let mut captured = Instant::now();
                 let mut converted = captured;
                 if plan.refresh {
-                    let result = current.with_bgra(|src, stride| {
-                        captured = Instant::now();
-                        let result = stream.buffers.convert(plan.slot, src, stride);
-                        converted = Instant::now();
-                        result
-                    })?;
+                    let result = if current.uses_gpu_nv12() {
+                        current.with_nv12(|src, stride| {
+                            captured = Instant::now();
+                            let result = stream.buffers.copy_nv12(plan.slot, src, stride);
+                            converted = Instant::now();
+                            result
+                        })?
+                    } else {
+                        current.with_bgra(|src, stride| {
+                            captured = Instant::now();
+                            let result = stream.buffers.convert(plan.slot, src, stride);
+                            converted = Instant::now();
+                            result
+                        })?
+                    };
                     result.map_err(CaptureError::Fatal)?;
                     if config.transport != Transport::Ndi {
                         // Release the mapped GPU surface before CPU JPEG work.
@@ -543,6 +553,7 @@ mod windows_worker {
                         source_clock_uncertainty_100ns: source_timestamp
                             .map(|value| value.uncertainty_100ns),
                         refreshed: plan.refresh,
+                        gpu_conversion: current.uses_gpu_nv12(),
                         desktop_updated: capture.desktop_updated,
                         release_ms: capture.release_ms,
                         acquire_ms: capture.acquire_ms,

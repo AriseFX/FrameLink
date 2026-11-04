@@ -1,0 +1,372 @@
+{
+  "scope": "Same-size desktop capture at fixed 300 FPS, DXGI LastPresentTime to decoded BGRX CPU pixels on NAS. Excludes source drawing, composition before LastPresentTime, receiver application copies, display, GPU upload and AI.",
+  "method": "ABBA per size: CPU, GPU, GPU, CPU. 15 seconds measured at receiver plus 3 seconds warmup. Exact NDI timecode matching; first arrival of each new desktop update; repeats excluded from primary latency. Before/after clock calibration interpolated per trial. Same executable and stable NDI buffers in both paths.",
+  "gpu_path": "Cropped BGRA GPU texture -> compute shader -> packed NV12 GPU buffer -> staging buffer -> CPU copy to stable NDI buffer. No resize, no extra queued frame. This is not zero-copy.",
+  "clock_uncertainty_bound_ms": 0.355674,
+  "validation": {
+    "hardware_cases": 24,
+    "sizes": [
+      "2x2",
+      "6x4",
+      "18x34",
+      "416x416",
+      "640x640",
+      "722x4",
+      "1922x4",
+      "32x1082"
+    ],
+    "patterns": [
+      "random RGBA including variable alpha",
+      "color bars",
+      "grayscale"
+    ],
+    "gpu_cpu_byte_exact_all_cases": true,
+    "standard_unit_tests": 54,
+    "sandbox_network_failures": 3,
+    "network_tests_passed_outside_sandbox": true
+  },
+  "limitation": "Two short trials per mode at current desktop/GPU load, with cursor and preview disabled. Does not establish latency under a fully occupied game GPU. This experiment predates the UI/fallback integration in 3.1.3-dev.",
+  "groups": [
+    {
+      "size": 640,
+      "conversion": "cpu",
+      "refreshed_samples": 4224,
+      "capture_call_to_submit_ms": {
+        "n": 4224,
+        "min": 0.2297,
+        "median": 0.2927,
+        "p95": 0.364,
+        "p99": 0.4385,
+        "max": 2.6703,
+        "mean": 0.3005275331439394
+      },
+      "map_wait_ms": {
+        "n": 4224,
+        "min": 0.09809999999999999,
+        "median": 0.1521,
+        "p95": 0.2024,
+        "p99": 0.2862,
+        "max": 2.2496,
+        "mean": 0.15704476799242426
+      },
+      "cpu_conversion_or_nv12_copy_ms": {
+        "n": 4224,
+        "min": 0.1074,
+        "median": 0.1138,
+        "p95": 0.13640000000000002,
+        "p99": 0.1604,
+        "max": 0.3651,
+        "mean": 0.11671238162878787
+      },
+      "primary_latency_ms": {
+        "n": 2404,
+        "min": 2.684380756807059,
+        "median": 4.69257909507985,
+        "p95": 6.539499690756543,
+        "p99": 10.981009874296433,
+        "max": 13.182148672202516,
+        "mean": 4.859522492652968
+      },
+      "first_arrival_segments_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 2404,
+          "min": 1.940091840099285,
+          "median": 2.5383474682458314,
+          "p95": 3.247762676643447,
+          "p99": 3.5485230819293747,
+          "max": 6.034413001262919,
+          "mean": 2.6131762780107053
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 2404,
+          "min": 0.3143,
+          "median": 2.09295,
+          "p95": 3.6074,
+          "p99": 8.2985,
+          "max": 10.4907,
+          "mean": 2.246346214642263
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 2404,
+          "min": 2.684380756807059,
+          "median": 4.69257909507985,
+          "p95": 6.539499690756543,
+          "p99": 10.981009874296433,
+          "max": 13.182148672202516,
+          "mean": 4.859522492652968
+        }
+      },
+      "received_frames": 9002,
+      "trial_received_fps": [
+        300.06666666666666,
+        300.06666666666666
+      ],
+      "trial_sender_cpu_percent_one_core": [
+        21.665119758959897,
+        21.94338913851135
+      ],
+      "trials": [
+        "640-01-cpu",
+        "640-04-cpu"
+      ],
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0
+    },
+    {
+      "size": 640,
+      "conversion": "gpu",
+      "refreshed_samples": 4071,
+      "capture_call_to_submit_ms": {
+        "n": 4071,
+        "min": 0.1228,
+        "median": 0.1831,
+        "p95": 0.2355,
+        "p99": 0.3121,
+        "max": 9.259,
+        "mean": 0.19038924097273396
+      },
+      "map_wait_ms": {
+        "n": 4071,
+        "min": 0.08839999999999999,
+        "median": 0.1452,
+        "p95": 0.1887,
+        "p99": 0.25970000000000004,
+        "max": 9.155899999999999,
+        "mean": 0.15068906902480964
+      },
+      "cpu_conversion_or_nv12_copy_ms": {
+        "n": 4071,
+        "min": 0.010499999999999999,
+        "median": 0.0133,
+        "p95": 0.0187,
+        "p99": 0.029,
+        "max": 0.0562,
+        "mean": 0.013942176369442397
+      },
+      "primary_latency_ms": {
+        "n": 2424,
+        "min": 2.467154906107794,
+        "median": 4.478986628995358,
+        "p95": 6.231246580800075,
+        "p99": 10.190912260710888,
+        "max": 13.28320397513096,
+        "mean": 4.627933167529328
+      },
+      "first_arrival_segments_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 2424,
+          "min": 1.960617306003428,
+          "median": 2.5118829742794446,
+          "p95": 3.209067244671587,
+          "p99": 3.438804971362515,
+          "max": 4.976545124066206,
+          "mean": 2.5927797021827934
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 2424,
+          "min": 0.2449,
+          "median": 1.9092500000000001,
+          "p95": 3.4494,
+          "p99": 7.6927,
+          "max": 10.4457,
+          "mean": 2.035153465346535
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 2424,
+          "min": 2.467154906107794,
+          "median": 4.478986628995358,
+          "p95": 6.231246580800075,
+          "p99": 10.190912260710888,
+          "max": 13.28320397513096,
+          "mean": 4.627933167529328
+        }
+      },
+      "received_frames": 9002,
+      "trial_received_fps": [
+        300.06666666666666,
+        300.06666666666666
+      ],
+      "trial_sender_cpu_percent_one_core": [
+        20.70225155248279,
+        32.7250776696974
+      ],
+      "trials": [
+        "640-02-gpu",
+        "640-03-gpu"
+      ],
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0
+    },
+    {
+      "size": 416,
+      "conversion": "cpu",
+      "refreshed_samples": 4229,
+      "capture_call_to_submit_ms": {
+        "n": 4229,
+        "min": 0.1259,
+        "median": 0.1924,
+        "p95": 0.2589,
+        "p99": 0.3393,
+        "max": 0.5269,
+        "mean": 0.19900219910144243
+      },
+      "map_wait_ms": {
+        "n": 4229,
+        "min": 0.0786,
+        "median": 0.13119999999999998,
+        "p95": 0.1827,
+        "p99": 0.2628,
+        "max": 0.43,
+        "mean": 0.1360186332466304
+      },
+      "cpu_conversion_or_nv12_copy_ms": {
+        "n": 4229,
+        "min": 0.026,
+        "median": 0.0343,
+        "p95": 0.0577,
+        "p99": 0.06830000000000001,
+        "max": 0.1108,
+        "mean": 0.037394206668243085
+      },
+      "primary_latency_ms": {
+        "n": 2539,
+        "min": 1.0324010171086684,
+        "median": 3.9379564346122606,
+        "p95": 8.445964013133903,
+        "p99": 10.480789534188375,
+        "max": 15.667104218265308,
+        "mean": 4.143639599409633
+      },
+      "first_arrival_segments_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 2539,
+          "min": 0.6092010171087168,
+          "median": 2.1406444471438135,
+          "p95": 2.488966431000108,
+          "p99": 2.63801996697282,
+          "max": 4.942330439794318,
+          "mean": 1.8500650424974632
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 2539,
+          "min": 0.2353,
+          "median": 2.1095,
+          "p95": 6.4964,
+          "p99": 8.4513,
+          "max": 13.4926,
+          "mean": 2.29357455691217
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 2539,
+          "min": 1.0324010171086684,
+          "median": 3.9379564346122606,
+          "p95": 8.445964013133903,
+          "p99": 10.480789534188375,
+          "max": 15.667104218265308,
+          "mean": 4.143639599409633
+        }
+      },
+      "received_frames": 9002,
+      "trial_received_fps": [
+        300.06666666666666,
+        300.06666666666666
+      ],
+      "trial_sender_cpu_percent_one_core": [
+        17.84964763427022,
+        15.743098964223242
+      ],
+      "trials": [
+        "416-01-cpu",
+        "416-04-cpu"
+      ],
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0
+    },
+    {
+      "size": 416,
+      "conversion": "gpu",
+      "refreshed_samples": 4211,
+      "capture_call_to_submit_ms": {
+        "n": 4211,
+        "min": 0.1061,
+        "median": 0.171,
+        "p95": 0.2397,
+        "p99": 0.3365,
+        "max": 8.439,
+        "mean": 0.17944910947518405
+      },
+      "map_wait_ms": {
+        "n": 4211,
+        "min": 0.075,
+        "median": 0.1376,
+        "p95": 0.19210000000000002,
+        "p99": 0.2917,
+        "max": 8.364099999999999,
+        "mean": 0.14465129422939918
+      },
+      "cpu_conversion_or_nv12_copy_ms": {
+        "n": 4211,
+        "min": 0.0059,
+        "median": 0.007700000000000001,
+        "p95": 0.0108,
+        "p99": 0.016,
+        "max": 0.0413,
+        "mean": 0.00803614343386369
+      },
+      "primary_latency_ms": {
+        "n": 2510,
+        "min": 1.3166054868239598,
+        "median": 3.8927497817725794,
+        "p95": 5.573900036347709,
+        "p99": 9.517541331860343,
+        "max": 11.066874510051889,
+        "mean": 3.944191520878009
+      },
+      "first_arrival_segments_ms": {
+        "ndi_to_decoded_ms": {
+          "n": 2510,
+          "min": 0.6250571277080326,
+          "median": 1.9699388738267771,
+          "p95": 2.4374788808422636,
+          "p99": 2.5975572295600386,
+          "max": 2.7796949218665077,
+          "mean": 1.9139975368142637
+        },
+        "desktop_update_to_submit_ms": {
+          "n": 2510,
+          "min": 0.232,
+          "median": 1.9707,
+          "p95": 3.4306,
+          "p99": 7.3926,
+          "max": 9.1095,
+          "mean": 2.030193984063745
+        },
+        "desktop_update_to_decoded_ms": {
+          "n": 2510,
+          "min": 1.3166054868239598,
+          "median": 3.8927497817725794,
+          "p95": 5.573900036347709,
+          "p99": 9.517541331860343,
+          "max": 11.066874510051889,
+          "mean": 3.944191520878009
+        }
+      },
+      "received_frames": 9002,
+      "trial_received_fps": [
+        300.06666666666666,
+        300.06666666666666
+      ],
+      "trial_sender_cpu_percent_one_core": [
+        24.91622317872009,
+        18.532962741912577
+      ],
+      "trials": [
+        "416-02-gpu",
+        "416-03-gpu"
+      ],
+      "negative_ndi_samples": 0,
+      "negative_desktop_samples": 0
+    }
+  ],
+  "implementation": "Initial GPU conversion prototype based on 76b1a5024049e53665d24667912a343904e5aef4"
+}

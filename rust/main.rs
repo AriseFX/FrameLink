@@ -33,7 +33,7 @@ fn run() -> Result<(), String> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|value| value == "--measure-send") {
         if args.len() < 3 {
-            return Err("用法：FrameLink --measure-send <秒数1–60> <报告.json> [--fps 300] [--pixel nv12|bgrx]".into());
+            return Err("用法：FrameLink --measure-send <秒数1–60> <报告.json> [--fps 300] [--pixel nv12|bgrx] [--conversion cpu|gpu]".into());
         }
         #[cfg(windows)]
         {
