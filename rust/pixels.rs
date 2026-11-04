@@ -1,4 +1,4 @@
-use crate::model::{PixelFormat, Preview};
+use crate::model::PixelFormat;
 
 #[cfg(windows)]
 unsafe extern "C" {
@@ -165,40 +165,6 @@ impl FrameBuffers {
     }
 }
 
-/// A small, independent UI image; never handed to NDI or queued by the worker.
-pub fn preview_bgra(
-    src: &[u8],
-    stride: usize,
-    width: usize,
-    height: usize,
-    sequence: u64,
-) -> Result<Preview, String> {
-    validate_bgra(src, stride, width, height)?;
-    let scale = (320.0 / width as f64).min(320.0 / height as f64).min(1.0);
-    let w = ((width as f64 * scale) as usize).max(1);
-    let h = ((height as f64 * scale) as usize).max(1);
-    let mut rgba = vec![0; w * h * 4];
-    for y in 0..h {
-        let source_y = y * height / h;
-        for x in 0..w {
-            let input = source_y * stride + (x * width / w) * 4;
-            let output = (y * w + x) * 4;
-            rgba[output..output + 4].copy_from_slice(&[
-                src[input + 2],
-                src[input + 1],
-                src[input],
-                255,
-            ]);
-        }
-    }
-    Ok(Preview {
-        width: w,
-        height: h,
-        rgba,
-        sequence,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,19 +259,5 @@ mod tests {
             assert_eq!(buffers.pixels[0], previous);
             assert_eq!(addresses, [buffers.data(0), buffers.data(1)]);
         }
-    }
-    #[test]
-    fn preview_uses_rgb_channels_and_ignores_uninitialized_alpha() {
-        let p = preview_bgra(
-            &[1, 2, 3, 0, 5, 6, 7, 0, 9, 10, 11, 0, 13, 14, 15, 0],
-            8,
-            2,
-            2,
-            5,
-        )
-        .unwrap();
-        assert_eq!((p.width, p.height, p.sequence), (2, 2, 5));
-        assert_eq!(p.rgba[..8], [3, 2, 1, 255, 7, 6, 5, 255]);
-        assert!(preview_bgra(&[0; 4], 4, 2, 2, 0).is_err());
     }
 }

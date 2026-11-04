@@ -119,52 +119,6 @@ fn hardware_gpu_nv12_matches_cpu() {
                     .unwrap();
                 // libyuv SIMD may use two rounded averages instead of one 2x2 average.
                 assert!(max <= 1, "chroma {w}x{h} pattern {pattern}: {max}");
-                // A preview must read the exact same cropped BGRA pixels,
-                // and must not alter NV12 when the next send repeats it.
-                let mut preview = None;
-                device
-                    .CreateTexture2D(
-                        &D3D11_TEXTURE2D_DESC {
-                            Width: w,
-                            Height: h,
-                            MipLevels: 1,
-                            ArraySize: 1,
-                            Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-                            SampleDesc: DXGI_SAMPLE_DESC {
-                                Count: 1,
-                                Quality: 0,
-                            },
-                            Usage: D3D11_USAGE_STAGING,
-                            CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
-                            ..Default::default()
-                        },
-                        None,
-                        Some(&mut preview),
-                    )
-                    .unwrap();
-                let preview = preview.unwrap();
-                gpu.copy_bgra(&context, &preview);
-                let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
-                context
-                    .Map(&preview, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
-                    .unwrap();
-                let guard = super::super::MapGuard {
-                    context: &context,
-                    texture: &preview,
-                };
-                let pixels = slice::from_raw_parts(
-                    mapped.pData.cast::<u8>(),
-                    mapped.RowPitch as usize * h as usize,
-                );
-                for row in 0..h as usize {
-                    let input = ((row + 2) * tw as usize + 4) * 4;
-                    let output = row * mapped.RowPitch as usize;
-                    assert_eq!(
-                        &pixels[output..output + w as usize * 4],
-                        &full[input..input + w as usize * 4]
-                    );
-                }
-                drop(guard);
                 gpu.read(&context, &mut 0.0, |data, pitch| {
                     actual.copy_nv12(1, data, pitch)
                 })

@@ -192,10 +192,6 @@ impl GpuNv12 {
         }
     }
 
-    pub fn copy_bgra(&self, context: &ID3D11DeviceContext, staging: &ID3D11Texture2D) {
-        unsafe { context.CopyResource(staging, &self.input) };
-    }
-
     pub fn read<T>(
         &self,
         context: &ID3D11DeviceContext,

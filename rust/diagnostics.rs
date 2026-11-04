@@ -406,7 +406,6 @@ mod windows_sender {
         if !config.region.fits(monitor) {
             return Err("诊断配置中的自定义区域超出显示器范围，请先在界面调整采集区域".into());
         }
-        config.preview = false;
         config.diagnostics = true;
         options.apply(&mut config)?;
         config.validate()?;

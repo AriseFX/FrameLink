@@ -8,11 +8,6 @@ const MUTED: Color32 = Color32::from_rgb(113, 125, 143);
 const ACCENT: Color32 = Color32::from_rgb(47, 102, 236);
 const LINE: Color32 = Color32::from_rgb(226, 231, 238);
 const CANVAS: Color32 = Color32::from_rgb(245, 247, 250);
-/// Right column height that is not the live preview image (card padding, title,
-/// region line, metric cards and the source hint). Used to shrink the preview so
-/// the column fits the window instead of scrolling the whole page.
-const PREVIEW_CHROME: f32 = 336.0;
-
 pub struct DesktopApp {
     config: Config,
     engine: Engine,
@@ -23,15 +18,12 @@ pub struct DesktopApp {
     error: Option<String>,
     dismissed_worker_error: Option<String>,
     notice: Option<(String, Instant)>,
-    preview: Option<egui::TextureHandle>,
-    preview_sequence: Option<u64>,
     snapshot: bool,
     compact: bool,
     dirty_at: Option<Instant>,
     pending_pick: bool,
     exiting: bool,
     hidden: bool,
-    preview_enabled: bool,
     pub tray_available: bool,
     #[cfg(windows)]
     tray: Option<crate::tray::Tray>,
@@ -87,8 +79,8 @@ impl DesktopApp {
             config = Config::default();
             error = None;
             monitors = vec![Monitor {
-                id: "preview-display".into(),
-                name: "主显示器 · 界面预览".into(),
+                id: "snapshot-display".into(),
+                name: "主显示器 · 界面示例".into(),
                 x: 0,
                 y: 0,
                 width: 2560,
@@ -152,15 +144,12 @@ impl DesktopApp {
             error,
             dismissed_worker_error: None,
             notice: None,
-            preview: None,
-            preview_sequence: None,
             snapshot,
             compact,
             dirty_at: None,
             pending_pick: false,
             exiting: false,
             hidden: false,
-            preview_enabled: false,
             tray_available,
             #[cfg(windows)]
             tray,
@@ -187,24 +176,7 @@ impl DesktopApp {
         self.handle_window(ctx);
         self.poll_picker(ctx);
         let minimized = ctx.input(|input| input.viewport().minimized.unwrap_or(false));
-        self.sync_preview(!self.hidden && !minimized && !self.pending_pick);
         self.stats = self.engine.snapshot();
-        if let Some(frame) = self.engine.take_preview()
-            && self.preview_sequence != Some(frame.sequence)
-            && frame.width > 0
-            && frame.height > 0
-            && frame.rgba.len() == frame.width * frame.height * 4
-        {
-            let image =
-                egui::ColorImage::from_rgba_unmultiplied([frame.width, frame.height], &frame.rgba);
-            if let Some(texture) = self.preview.as_mut() {
-                texture.set(image, egui::TextureOptions::LINEAR);
-            } else {
-                self.preview =
-                    Some(ctx.load_texture("capture-preview", image, egui::TextureOptions::LINEAR));
-            }
-            self.preview_sequence = Some(frame.sequence);
-        }
         if self
             .dirty_at
             .is_some_and(|time| time.elapsed() > Duration::from_millis(700))
@@ -240,9 +212,7 @@ impl DesktopApp {
                     .show(ui, |ui| {
                         let wide = ui.available_width() >= 800.0;
                         if wide {
-                            // Both columns fill the visible height: an oversized settings
-                            // list scrolls inside its own card, while the preview column
-                            // absorbs the difference so the page itself never scrolls.
+                            // The settings card scrolls independently of the status column.
                             ui.horizontal_top(|ui| {
                                 ui.allocate_ui_with_layout(
                                     Vec2::new(328.0, body_height),
@@ -254,19 +224,18 @@ impl DesktopApp {
                                 ui.allocate_ui_with_layout(
                                     Vec2::new(right, body_height),
                                     egui::Layout::top_down(egui::Align::Min),
-                                    |ui| self.preview_column(ui, Some(body_height)),
+                                    |ui| self.status_column(ui),
                                 );
                             });
                         } else {
                             self.settings_card(ui, None);
                             ui.add_space(18.0);
-                            self.preview_column(ui, None);
+                            self.status_column(ui);
                         }
                     });
                 ui.add_space(16.0);
                 self.footer(ui);
             });
-        self.sync_preview(!self.hidden && !minimized && !self.pending_pick);
         if self.engine.is_running() || self.dirty_at.is_some() || self.pending_pick || self.exiting
         {
             ctx.request_repaint_after(Duration::from_millis(100));
@@ -357,7 +326,7 @@ impl DesktopApp {
                     ),
                     Phase::Idle => (
                         if self.snapshot {
-                            "界面预览"
+                            "界面示例"
                         } else {
                             "准备就绪"
                         },
@@ -730,7 +699,7 @@ impl DesktopApp {
 
                             ui.checkbox(&mut self.config.precision, "精确帧间调度")
                                 .on_hover_text(
-                                    "提高调度精度，但会增加 CPU 占用。建议先使用默认设置。",
+                                    "默认开启以降低调度延迟；关闭可减少 CPU 占用。",
                                 );
                         });
 
@@ -858,98 +827,63 @@ impl DesktopApp {
         }
     }
 
-    fn preview_column(&mut self, ui: &mut egui::Ui, height_budget: Option<f32>) {
+    fn status_column(&mut self, ui: &mut egui::Ui) {
         card().show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.label(RichText::new("采集预览").size(17.0).strong().color(INK));
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let response = ui.checkbox(
-                        &mut self.config.preview,
-                        RichText::new("开启预览").size(12.0).color(MUTED),
-                    );
-                    if response.changed() {
-                        self.dirty_at = Some(Instant::now());
-                        if !self.config.preview {
-                            self.preview = None;
-                        }
-                    }
-                });
-            });
-            ui.add_space(14.0);
-            let preferred = if self.compact || ui.ctx().content_rect().width() < 1100.0 {
-                200.0
-            } else {
-                (ui.ctx().content_rect().height() * 0.33).clamp(230.0, 280.0)
-            };
-            // Shrink the image area rather than overflowing the column: only when the
-            // window is too short for the minimum preview does the page scroll.
-            let chrome = PREVIEW_CHROME
-                + if self.config.transport == Transport::Udp {
-                    28.0
-                } else {
-                    0.0
-                };
-            let height = match height_budget {
-                Some(budget) => preferred.min((budget - chrome).max(150.0)),
-                None => preferred,
-            };
-            let (rect, _) = ui.allocate_exact_size(
-                Vec2::new(ui.available_width(), height),
-                egui::Sense::hover(),
+            ui.label(RichText::new("发送状态").size(17.0).strong().color(INK));
+            ui.add_space(18.0);
+            ui.label(
+                RichText::new(format!(
+                    "{} × {}",
+                    self.config.region.width, self.config.region.height
+                ))
+                .size(36.0)
+                .strong()
+                .color(INK),
             );
-            ui.painter()
-                .rect_filled(rect, 10.0, Color32::from_rgb(244, 247, 252));
-            if self.config.preview
-                && self.engine.is_running()
-                && let Some(texture) = self.preview.as_ref()
-            {
-                let size = texture.size_vec2();
-                let scale = ((rect.width() - 20.0) / size.x).min((rect.height() - 20.0) / size.y);
-                let image_rect = egui::Rect::from_center_size(rect.center(), size * scale);
-                ui.painter().image(
-                    texture.id(),
-                    image_rect,
-                    egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0)),
-                    Color32::WHITE,
-                );
-            } else {
-                self.draw_placeholder(ui, rect);
-            }
-            ui.add_space(12.0);
-            ui.horizontal(|ui| {
-                draw_icon(ui, Icon::Crop, 14.0, MUTED);
-                ui.label(
-                    RichText::new(format!(
-                        "{} × {} px",
-                        self.config.region.width, self.config.region.height
-                    ))
-                    .size(12.0)
-                    .color(INK),
-                );
-                ui.add_space(5.0);
-                ui.label(RichText::new("·").color(MUTED));
-                ui.label(
-                    RichText::new(if self.config.preset.is_some() {
-                        "中心区域"
+            ui.label(RichText::new("采集与发送尺寸 · px").size(12.0).color(MUTED));
+            ui.add_space(18.0);
+            divider(ui);
+            ui.add_space(14.0);
+            egui::Grid::new("stream-status")
+                .num_columns(2)
+                .min_row_height(18.0)
+                .spacing([28.0, 7.0])
+                .show(ui, |ui| {
+                    ui.label(RichText::new("传输协议").color(MUTED));
+                    ui.label(self.config.transport.label());
+                    ui.end_row();
+                    ui.label(RichText::new("视频格式").color(MUTED));
+                    ui.label(if self.config.transport == Transport::Ndi {
+                        pixel_name(self.config.pixel).to_owned()
                     } else {
-                        "自定义区域"
-                    })
-                    .size(12.0)
-                    .color(MUTED),
-                );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(
-                        RichText::new(if self.config.preview {
-                            "预览按需刷新"
-                        } else {
-                            "预览关闭时节省资源"
-                        })
-                        .size(11.0)
-                        .color(MUTED),
-                    );
+                        format!("JPEG · 质量 {}", self.config.jpeg_quality)
+                    });
+                    ui.end_row();
+                    ui.label(RichText::new("固定帧率").color(MUTED));
+                    ui.label(format!("{} fps", self.config.fps));
+                    ui.end_row();
+                    ui.label(RichText::new("采集方式").color(MUTED));
+                    ui.label(if self.stats.backend.is_empty() {
+                        backend_name(self.config.backend)
+                    } else {
+                        &self.stats.backend
+                    });
+                    ui.end_row();
+                    ui.label(RichText::new("区域位置").color(MUTED));
+                    ui.label(format!(
+                        "X {} · Y {}",
+                        self.config.region.x, self.config.region.y
+                    ));
+                    ui.end_row();
+                    ui.label(RichText::new("精确调度").color(MUTED));
+                    ui.label(if self.config.precision {
+                        "已开启"
+                    } else {
+                        "已关闭"
+                    });
+                    ui.end_row();
                 });
-            });
         });
         ui.add_space(16.0);
         let active = self.engine.is_running() && self.stats.frames > 0;
@@ -1077,109 +1011,6 @@ impl DesktopApp {
                 });
             self.notice("已复制");
         }
-    }
-
-    fn draw_placeholder(&self, ui: &egui::Ui, rect: egui::Rect) {
-        let p = ui.painter();
-        let dots = Color32::from_rgb(217, 226, 239);
-        let mut y = rect.top() + 15.0;
-        while y < rect.bottom() {
-            let mut x = rect.left() + 15.0;
-            while x < rect.right() {
-                p.circle_filled(egui::pos2(x, y), 0.85, dots);
-                x += 20.0;
-            }
-            y += 20.0;
-        }
-        let screen_width = (rect.width() * 0.61)
-            .min(300.0)
-            .min((rect.height() - 105.0).max(65.0) / 0.53);
-        let screen = egui::Rect::from_center_size(
-            rect.center() - egui::vec2(0.0, 28.0),
-            egui::vec2(screen_width, screen_width * 0.53),
-        );
-        p.rect_filled(screen, 8.0, Color32::from_rgb(234, 239, 248));
-        p.rect_stroke(
-            screen,
-            8.0,
-            Stroke::new(1.3_f32, Color32::from_rgb(203, 214, 233)),
-            egui::StrokeKind::Inside,
-        );
-        let monitor = self.selected_monitor();
-        let mw = monitor.map_or(2560.0, |m| m.width as f32);
-        let mh = monitor.map_or(1440.0, |m| m.height as f32);
-        let crop_w = (screen.width() * self.config.region.width as f32 / mw)
-            .clamp(42.0, screen.width() - 8.0);
-        let crop_h = (screen.height() * self.config.region.height as f32 / mh)
-            .clamp(42.0, screen.height() - 8.0);
-        let mut center = screen.center();
-        if let Some(monitor) = monitor {
-            center.x = screen.left()
-                + (self.config.region.x as f32 - monitor.x as f32
-                    + self.config.region.width as f32 / 2.0)
-                    / mw
-                    * screen.width();
-            center.y = screen.top()
-                + (self.config.region.y as f32 - monitor.y as f32
-                    + self.config.region.height as f32 / 2.0)
-                    / mh
-                    * screen.height();
-        }
-        let crop = egui::Rect::from_center_size(center, egui::vec2(crop_w, crop_h))
-            .intersect(screen.shrink(4.0));
-        p.rect_filled(crop, 3.0, Color32::from_rgb(215, 228, 255));
-        p.rect_stroke(
-            crop,
-            3.0,
-            Stroke::new(1.4_f32, ACCENT),
-            egui::StrokeKind::Inside,
-        );
-        for corner in [
-            crop.left_top(),
-            crop.right_top(),
-            crop.left_bottom(),
-            crop.right_bottom(),
-        ] {
-            p.circle_filled(corner, 2.5, ACCENT);
-        }
-        let stem_top = egui::pos2(screen.center().x, screen.bottom());
-        p.line_segment(
-            [stem_top, stem_top + egui::vec2(0.0, 11.0)],
-            Stroke::new(2.0_f32, Color32::from_rgb(203, 214, 233)),
-        );
-        p.line_segment(
-            [
-                stem_top + egui::vec2(-17.0, 12.0),
-                stem_top + egui::vec2(17.0, 12.0),
-            ],
-            Stroke::new(2.0_f32, Color32::from_rgb(203, 214, 233)),
-        );
-        p.text(
-            egui::pos2(rect.center().x, screen.top() - 20.0),
-            egui::Align2::CENTER_CENTER,
-            "区域示意",
-            FontId::proportional(10.5),
-            MUTED,
-        );
-        let title = if self.config.preview {
-            "开始发送后显示实时预览"
-        } else {
-            "专注传输，预览已关闭"
-        };
-        p.text(
-            egui::pos2(rect.center().x, screen.bottom() + 48.0),
-            egui::Align2::CENTER_CENTER,
-            title,
-            FontId::proportional(14.0),
-            INK,
-        );
-        p.text(
-            egui::pos2(rect.center().x, screen.bottom() + 70.0),
-            egui::Align2::CENTER_CENTER,
-            "仅发送选定区域 · 始终优先处理最新画面",
-            FontId::proportional(11.0),
-            MUTED,
-        );
     }
 
     fn footer(&mut self, ui: &mut egui::Ui) {
@@ -1327,8 +1158,6 @@ impl DesktopApp {
             return;
         }
         self.save();
-        self.preview = None;
-        self.preview_sequence = None;
         if let Err(error) = self.engine.start(self.config.clone()) {
             self.error = Some(error);
             #[cfg(windows)]
@@ -1372,7 +1201,6 @@ impl DesktopApp {
         let (send, receive) = std::sync::mpsc::channel();
         self.pending_pick = true;
         self.picker = Some(receive);
-        self.sync_preview(false);
         crate::tray::set_window_visible(ctx, false);
         let worker_ctx = ctx.clone();
         if let Err(error) = std::thread::Builder::new()
@@ -1430,16 +1258,8 @@ impl DesktopApp {
         self.engine.request_stop();
         self.save();
     }
-    fn sync_preview(&mut self, visible: bool) {
-        let desired = self.config.preview && visible && !self.exiting;
-        if desired != self.preview_enabled {
-            self.engine.set_preview(desired);
-            self.preview_enabled = desired;
-        }
-    }
     pub fn restore_window(&mut self, ctx: &egui::Context) {
         self.hidden = false;
-        self.sync_preview(true);
         crate::tray::set_window_visible(ctx, true);
         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
         ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
@@ -1448,7 +1268,6 @@ impl DesktopApp {
     pub fn hide_to_tray(&mut self, ctx: &egui::Context) {
         if self.tray_available {
             self.hidden = true;
-            self.sync_preview(false);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
         }
     }

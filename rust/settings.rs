@@ -133,7 +133,7 @@ pub fn import_ini(bytes: &[u8]) -> Result<Config, String> {
     c.precision = if values.contains_key("lowlatency") {
         integer("lowlatency", 0)? != 0
     } else {
-        integer("precision", 0)? != 0
+        integer("precision", i32::from(c.precision))? != 0
     };
     c.backend = match integer("backend", 0)? {
         0 => Backend::Auto,
@@ -193,7 +193,7 @@ mod tests {
             assert!(!saved.contains("unlimited"));
             assert_eq!(parse(&saved).unwrap().fps, 475);
         }
-        assert_eq!(parse("unlimited = true").unwrap().fps, 300);
+        assert_eq!(parse("unlimited = true").unwrap().fps, 1000);
     }
     #[test]
     fn custom_fixed_fps_survives_settings_round_trip() {
@@ -209,18 +209,34 @@ mod tests {
     #[test]
     fn round_trip_preserves_preferences() {
         let c = Config {
-            preview: true,
-            precision: true,
+            precision: false,
             network_adapter: "{stable-adapter-id}".into(),
             ..Config::default()
         };
         let text = toml::to_string(&c).unwrap();
         let restored = parse(&text).unwrap();
-        assert!(restored.preview && restored.precision);
+        assert!(!restored.precision);
         assert_eq!(restored.region, c.region);
         assert_eq!(restored.network_adapter, c.network_adapter);
         // Existing installations have no adapter setting and continue to follow NDI.
         assert!(parse("fps = 240").unwrap().network_adapter.is_empty());
+    }
+    #[test]
+    fn defaults_and_existing_preferences_remain_distinct() {
+        let fresh = parse("").unwrap();
+        assert_eq!(fresh.fps, 1000);
+        assert!(fresh.precision);
+        let upgraded =
+            parse("retired_display_option = true\nfps = 475\nprecision = false").unwrap();
+        assert_eq!(upgraded.fps, 475);
+        assert!(!upgraded.precision);
+        assert!(
+            !toml::to_string(&upgraded)
+                .unwrap()
+                .contains("retired_display_option")
+        );
+        assert!(import_ini(b"[capture]\n").unwrap().precision);
+        assert!(!import_ini(b"[capture]\nprecision=0\n").unwrap().precision);
     }
     #[test]
     fn transport_settings_round_trip_and_legacy_default() {

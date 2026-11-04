@@ -90,7 +90,6 @@ pub struct Config {
     pub gpu_nv12: bool,
     pub cursor: bool,
     pub precision: bool,
-    pub preview: bool,
     pub close_to_tray: bool,
     #[serde(skip)]
     pub diagnostics: bool,
@@ -112,13 +111,12 @@ impl Default for Config {
                 height: 512,
             },
             preset: Some(512),
-            fps: 300,
+            fps: 1000,
             backend: Backend::Auto,
             pixel: PixelFormat::Nv12,
             gpu_nv12: false,
             cursor: false,
-            precision: false,
-            preview: false,
+            precision: true,
             close_to_tray: true,
             diagnostics: false,
         }
@@ -228,17 +226,21 @@ pub struct Stats {
     pub ndi_version: String,
     pub timings: Vec<crate::diagnostics::FrameTiming>,
 }
-#[derive(Clone, Debug)]
-pub struct Preview {
-    pub width: usize,
-    pub height: usize,
-    pub rgba: Vec<u8>,
-    pub sequence: u64,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn new_configuration_uses_the_measured_low_latency_defaults() {
+        let config = Config::default();
+        assert_eq!(config.fps, 1000);
+        assert!(config.precision);
+        assert_eq!(config.backend, Backend::Auto);
+        assert_eq!(config.pixel, PixelFormat::Nv12);
+        assert_eq!(config.transport, Transport::Ndi);
+        assert!(!config.cursor);
+        assert!(!config.gpu_nv12);
+        assert!(config.validate().is_ok());
+    }
     fn monitor() -> Monitor {
         Monitor {
             id: "secondary".into(),
@@ -284,8 +286,6 @@ mod tests {
         assert!(!c.gpu_nv12);
         assert!(c.supports_gpu_nv12());
         c.gpu_nv12 = true;
-        c.preview = true;
-        assert!(c.supports_gpu_nv12());
         c.cursor = true;
         assert!(!c.supports_gpu_nv12());
         c.cursor = false;

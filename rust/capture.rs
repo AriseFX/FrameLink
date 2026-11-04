@@ -363,7 +363,7 @@ struct DxgiCapture {
     gpu_fallback: Option<String>,
     held_frame: Option<FrameLease<DxgiFrame>>,
     context: ID3D11DeviceContext,
-    staging: ID3D11Texture2D,
+    staging: Option<ID3D11Texture2D>,
     duplication: IDXGIOutputDuplication,
     region: Region,
     bounds: RECT,
@@ -472,12 +472,6 @@ impl DxgiCapture {
                         CPUAccessFlags: D3D11_CPU_ACCESS_READ.0 as u32,
                         ..Default::default()
                     };
-                    let mut staging = None;
-                    device
-                        .CreateTexture2D(&desc, None, Some(&mut staging))
-                        .map_err(|e| error("创建区域读取纹理", e))?;
-                    let staging = staging
-                        .ok_or_else(|| CaptureError::Fatal("D3D11没有返回读取纹理".into()))?;
                     let (gpu, gpu_fallback) = if config.gpu_nv12 && config.supports_gpu_nv12() {
                         match gpu_nv12::GpuNv12::new(
                             &device,
@@ -491,6 +485,15 @@ impl DxgiCapture {
                     } else {
                         (None, None)
                     };
+                    let mut staging = None;
+                    if gpu.is_none() {
+                        device
+                            .CreateTexture2D(&desc, None, Some(&mut staging))
+                            .map_err(|e| error("创建区域读取纹理", e))?;
+                        if staging.is_none() {
+                            return Err(CaptureError::Fatal("D3D11没有返回读取纹理".into()));
+                        }
+                    }
                     return Ok(Self {
                         gpu,
                         gpu_fallback,
@@ -582,9 +585,13 @@ impl DxgiCapture {
                     if let Some(gpu) = &self.gpu {
                         gpu.capture(&self.context, &texture, &area);
                     } else {
+                        let staging = self
+                            .staging
+                            .as_ref()
+                            .ok_or_else(|| CaptureError::Fatal("BGRA读取纹理未初始化".into()))?;
                         unsafe {
                             self.context.CopySubresourceRegion(
-                                &self.staging,
+                                staging,
                                 0,
                                 0,
                                 0,
@@ -625,16 +632,15 @@ impl DxgiCapture {
         if !self.has_image {
             return Err(CaptureError::Fatal("尚无可读取的桌面帧".into()));
         }
-        // Read BGRA only when the independent preview requests it. The GPU crop
-        // remains valid even when the desktop has not changed since last time.
-        if let Some(gpu) = &self.gpu {
-            gpu.copy_bgra(&self.context, &self.staging);
-        }
+        let staging = self
+            .staging
+            .as_ref()
+            .ok_or_else(|| CaptureError::Fatal("当前采集路径不提供BGRA读取".into()))?;
         let mut mapped = D3D11_MAPPED_SUBRESOURCE::default();
         let map_started = self.diagnostics_enabled.then(Instant::now);
         let result = unsafe {
             self.context
-                .Map(&self.staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
+                .Map(staging, 0, D3D11_MAP_READ, 0, Some(&mut mapped))
         };
         if let Some(started) = map_started {
             self.diagnostics.map_wait_ms += started.elapsed().as_secs_f64() * 1000.0;
@@ -642,7 +648,7 @@ impl DxgiCapture {
         result.map_err(|e| error("映射桌面区域", e))?;
         let guard = MapGuard {
             context: &self.context,
-            texture: &self.staging,
+            texture: staging,
         };
         let pitch = mapped.RowPitch as usize;
         if mapped.pData.is_null() || pitch < self.region.width as usize * 4 {

@@ -1,6 +1,6 @@
 //! The GUI only shares small status records and control flags with the worker.
 //! Capture objects, NDI handles, timers, and pixel pointers stay on that worker.
-use crate::model::{Config, Phase, Preview, Stats};
+use crate::model::{Config, Phase, Stats};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -10,9 +10,7 @@ use std::thread::JoinHandle;
 struct Shared {
     stop: Arc<AtomicBool>,
     running: AtomicBool,
-    preview_enabled: AtomicBool,
     stats: Mutex<Stats>,
-    preview: Mutex<Option<Preview>>,
 }
 impl Shared {
     fn stats(&self, update: impl FnOnce(&mut Stats)) {
@@ -35,9 +33,7 @@ impl Engine {
             shared: Arc::new(Shared {
                 stop: Arc::new(AtomicBool::new(false)),
                 running: AtomicBool::new(false),
-                preview_enabled: AtomicBool::new(false),
                 stats: Mutex::new(Stats::default()),
-                preview: Mutex::new(None),
             }),
             worker: None,
         }
@@ -69,14 +65,6 @@ impl Engine {
         #[cfg(windows)]
         {
             self.shared.stop.store(false, Ordering::Release);
-            self.shared
-                .preview_enabled
-                .store(config.preview, Ordering::Relaxed);
-            *self
-                .shared
-                .preview
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
             self.shared.stats(|s| {
                 *s = Stats {
                     phase: Phase::Starting,
@@ -154,26 +142,6 @@ impl Engine {
         }
         stats
     }
-    /// Taking the latest image atomically discards any older, unconsumed preview.
-    pub fn take_preview(&self) -> Option<Preview> {
-        self.shared
-            .preview
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-    }
-    pub fn set_preview(&self, enabled: bool) {
-        self.shared
-            .preview_enabled
-            .store(enabled, Ordering::Relaxed);
-        if !enabled {
-            *self
-                .shared
-                .preview
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = None;
-        }
-    }
     /// Reap a finished worker without ever joining a live worker on a UI update.
     pub fn poll(&mut self) {
         if self.worker.as_ref().is_some_and(JoinHandle::is_finished)
@@ -209,7 +177,7 @@ mod windows_worker {
         diagnostics::FrameTiming,
         model::{Backend, Transport},
         ndi::Ndi,
-        pixels::{FrameBuffers, preview_bgra},
+        pixels::FrameBuffers,
         policy::{
             CaptureRetry, LatestFrameSlots, next_frame_deadline, region_in_desktop, timer_delay,
         },
@@ -424,9 +392,6 @@ mod windows_worker {
         let interval = Duration::from_secs_f64(1.0 / config.fps as f64);
         let mut last_stats = started;
         let mut last_bounds_check = started;
-        let mut last_preview = started
-            .checked_sub(Duration::from_secs(1))
-            .unwrap_or(started);
         let (mut frames, mut repeats, mut window_frames, mut window_updates) =
             (0u64, 0u64, 0u64, 0u64);
         let mut measurements = Measurements::default();
@@ -565,25 +530,6 @@ mod windows_worker {
                         accumulated_desktop_frames: capture.accumulated_frames,
                     });
                 }
-                // Preview has its own two-fps path after submission, so it can
-                // neither keep an old send buffer alive nor delay that frame's submit.
-                if shared.preview_enabled.load(Ordering::Relaxed)
-                    && submitted.duration_since(last_preview) >= Duration::from_millis(500)
-                    && !shared.stop.load(Ordering::Acquire)
-                {
-                    let preview = current.with_bgra(|src, stride| {
-                        preview_bgra(
-                            src,
-                            stride,
-                            config.region.width as usize,
-                            config.region.height as usize,
-                            frames,
-                        )
-                    })?;
-                    let preview = preview.map_err(CaptureError::Fatal)?;
-                    *shared.preview.lock().unwrap_or_else(|e| e.into_inner()) = Some(preview);
-                    last_preview = Instant::now();
-                }
                 Ok(())
             })();
             if let Err(error) = result {
@@ -676,20 +622,6 @@ mod windows_worker {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn preview_mailbox_contains_only_the_latest_image() {
-        let engine = Engine::new();
-        for sequence in 1..=3 {
-            *engine.shared.preview.lock().unwrap() = Some(Preview {
-                width: 1,
-                height: 1,
-                rgba: vec![0; 4],
-                sequence,
-            });
-        }
-        assert_eq!(engine.take_preview().unwrap().sequence, 3);
-        assert!(engine.take_preview().is_none());
-    }
     #[test]
     fn stop_token_is_stable_and_does_not_block() {
         let engine = Engine::new();

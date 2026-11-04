@@ -203,7 +203,6 @@
     "backend": "Dxgi",
     "precision": true,
     "cursor": false,
-    "preview": false,
     "pixel": "Nv12",
     "crop": [
       640,
