@@ -84,7 +84,7 @@ def main():
     ap.add_argument('--color', choices=['bgrx', 'fastest'], default='bgrx')
     ap.add_argument('--output', required=True)
     ap.add_argument('--url')
-    ap.add_argument('--marker', action='store_true')
+    ap.add_argument('--marker', action='store_true', help='Optionally inspect visual test markers; not needed for desktop-update latency')
     args = ap.parse_args()
     if not math.isfinite(args.seconds) or not 1 <= args.seconds <= 60:
         ap.error('--seconds must be between 1 and 60')
@@ -181,6 +181,7 @@ def main():
             receiver_host=platform.node(), runtime=version().decode(),
             source=chosen.name.decode(), url=(chosen.url or b'').decode(),
             receive_bandwidth=100, receive_color=args.color, video=shape,
+            marker_inspection=args.marker,
             clock='Windows precise FILETIME / Linux CLOCK_REALTIME; uncalibrated cross-host deltas',
             cross_host_clock_correction_ms=None,
             warmup_seconds=args.warmup, measurement_seconds=args.seconds,

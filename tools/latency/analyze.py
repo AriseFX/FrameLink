@@ -1,4 +1,4 @@
-"""Join FrameLink sender traces with decoded frames and calibrated receiver clocks."""
+"""Measure desktop-update to decoded-memory latency without drawing a test window."""
 import argparse
 import csv
 import json
@@ -10,7 +10,6 @@ METRICS = (
     "ndi_to_decoded_ms",
     "desktop_update_to_submit_ms",
     "desktop_update_to_decoded_ms",
-    "render_start_to_decoded_ms",
 )
 
 
@@ -69,63 +68,85 @@ class ClockCorrection:
         )
 
 
-def join_frames(sender_samples, receiver_rows, clock):
+def join_frames(sender_samples, receiver_rows, clock, visual_markers=False):
     traces = {}
-    for sample in sender_samples:
+    desktop_frame = None
+    for sample in sorted(sender_samples, key=lambda sample: sample["frame"]):
         code = sample.get("ndi_timecode_100ns")
         if code is None:
             continue
         if code in traces:
             raise ValueError("Duplicate sender NDI timecode")
-        traces[code] = sample
-    joined, seen, initial_marker = [], set(), None
+        if sample["desktop_updated"] and sample["refreshed"]:
+            desktop_frame = sample["frame"]
+        traces[code] = (sample, desktop_frame)
+    joined, seen, initial_update = [], set(), None
     for row in receiver_rows:
         code = int(row["sender_timecode_100ns"])
-        trace = traces.get(code)
-        if trace is None:
+        match = traces.get(code)
+        if match is None:
             raise ValueError(f"No sender trace for received timecode {code}")
+        trace, desktop_frame = match
         arrived = int(row["receiver_utc_100ns"])
         offset = clock.offset_ms(code)
         present = trace.get("source_present_100ns")
-        marker = int(row["render_marker_100ns"]) if row.get("render_marker_100ns") else None
-        if initial_marker is None and marker is not None:
-            initial_marker = marker
-        first = marker is not None and marker != initial_marker and marker not in seen
-        if marker is not None:
-            seen.add(marker)
-        if first and not (trace["desktop_updated"] and trace["refreshed"]):
+        marker = int(row["render_marker_100ns"]) if visual_markers and row.get("render_marker_100ns") else None
+        # UTC pairing can vary slightly for repeats of the same DXGI update.
+        # Use the originating sender frame, not equality of mapped UTC timestamps.
+        update = marker if visual_markers else desktop_frame if present is not None else None
+        if initial_update is None and update is not None:
+            initial_update = update
+        first = update is not None and update != initial_update and update not in seen
+        if update is not None:
+            seen.add(update)
+        if visual_markers and first and not (trace["desktop_updated"] and trace["refreshed"]):
             raise ValueError("A new visual marker has no corresponding refreshed desktop frame")
-        joined.append({
-            **row,
+        result = {
+            **{key: value for key, value in row.items() if key != "render_marker_100ns"},
             "sender_frame": trace["frame"],
+            "desktop_update_frame": desktop_frame,
             "first_arrival_of_update": first,
             "clock_correction_ms": offset,
             "source_clock_uncertainty_100ns": trace.get("source_clock_uncertainty_100ns"),
             "ndi_to_decoded_ms": (arrived - code) / 10000 - offset,
             "desktop_update_to_submit_ms": (code - present) / 10000 if present is not None else None,
             "desktop_update_to_decoded_ms": (arrived - present) / 10000 - offset if present is not None else None,
-            "render_start_to_decoded_ms": (arrived - marker) / 10000 - offset if marker is not None else None,
-        })
+        }
+        if visual_markers:
+            result["render_marker_100ns"] = marker
+            result["render_start_to_decoded_ms"] = (arrived - marker) / 10000 - offset if marker is not None else None
+        joined.append(result)
     if not joined:
         raise ValueError("No received frames")
     return joined
 
 
-def summarize(rows):
+def summarize(rows, visual_markers=False):
+    keys = METRICS + (("render_start_to_decoded_ms",) if visual_markers else ())
+
     def metrics(samples):
         return {
             key: distribution(row[key] for row in samples if row[key] is not None)
-            for key in METRICS
+            for key in keys
         }
     fresh = [row for row in rows if row["first_arrival_of_update"]]
-    return {
+    fresh_metrics = metrics(fresh)
+    result = {
+        "update_identity": "visual_marker" if visual_markers else "sender_desktop_update_frame",
+        "primary_metric": "desktop_update_to_decoded_ms",
+        "primary_latency_ms": fresh_metrics["desktop_update_to_decoded_ms"],
         "received_frames": len(rows),
-        "distinct_updates_after_first_marker": len(fresh),
-        "frames_without_valid_marker": sum(not row.get("render_marker_100ns") for row in rows),
+        "updates_after_initial_sample": len(fresh),
+        "frames_without_desktop_timestamp": sum(row["desktop_update_to_decoded_ms"] is None for row in rows),
         "negative_ndi_samples": sum(row["ndi_to_decoded_ms"] < 0 for row in rows),
+        "negative_desktop_samples": sum(row["desktop_update_to_decoded_ms"] is not None and row["desktop_update_to_decoded_ms"] < 0 for row in rows),
         "all_arrivals_including_repeats_ms": metrics(rows),
-        "fresh_update_first_arrival_ms": metrics(fresh),
+        "fresh_update_first_arrival_ms": fresh_metrics,
     }
+    if visual_markers:
+        result["distinct_updates_after_first_marker"] = len(fresh)
+        result["frames_without_valid_marker"] = sum(not row.get("render_marker_100ns") for row in rows)
+    return result
 
 
 def read_json(path):
@@ -140,6 +161,7 @@ def main():
     parser.add_argument("--clock-before", type=Path)
     parser.add_argument("--clock-after", type=Path)
     parser.add_argument("--same-clock", action="store_true", help="Only for sender and receiver on the same OS instance")
+    parser.add_argument("--marker", action="store_true", help="Also analyze optional visual markers from historical test-window recordings")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     if args.output.suffix.lower() != ".json":
@@ -160,19 +182,22 @@ def main():
     if not sender["measurement_succeeded"] or sender["missing_diagnostic_samples"]:
         raise ValueError("Sender failed or has missing diagnostic traces")
     with (args.samples or args.receiver.with_suffix(".csv")).open(newline="", encoding="utf-8-sig") as stream:
-        rows = join_frames(sender["samples"], csv.DictReader(stream), clock)
+        rows = join_frames(sender["samples"], csv.DictReader(stream), clock, args.marker)
     report = {
-        "endpoint": "Complete decoded CPU pixel buffer returned by NDI, before marker inspection",
+        "startpoint": "DXGI LastPresentTime: desktop update available for capture",
+        "endpoint": "Complete decoded CPU pixel buffer returned by NDI, before application processing",
         "video": receiver["video"],
         "sender_config": sender["config"],
         "measurement_seconds": receiver["measurement_seconds"],
         "clock_offset_uncertainty_bound_ms": clock.uncertainty_ms,
-        **summarize(rows),
+        **summarize(rows, args.marker),
         "notes": [
             "All latency units are milliseconds; sender timecodes are Unix UTC in 100 ns units.",
             "Source desktop timestamp describes the entire monitor, not only the cropped content.",
-            "The first visible marker is omitted from fresh-update statistics because it may have arrived during warmup.",
-            "First-arrival statistics describe delivered updates, not delivery of every rendered update.",
+            "The initial update is omitted from first-arrival statistics because it may have arrived during warmup.",
+            "Desktop updates are identified from sender refresh events; changes outside the crop can produce new desktop updates without changing cropped pixels.",
+            "First-arrival statistics describe delivered updates. A null primary latency means no eligible new desktop updates were measured.",
+            "Primary latency excludes source application drawing and desktop composition before LastPresentTime.",
             "Cross-host calibration assumes no intermediate clock steps. Negative samples require investigation.",
             "Native UYVY reception excludes RGB conversion; compare matching pixel formats for equal work.",
             "Receiver display, application-owned copies, AI preprocessing, GPU upload and inference are excluded.",

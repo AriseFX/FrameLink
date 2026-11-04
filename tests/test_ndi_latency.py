@@ -30,11 +30,37 @@ class AnalysisTests(unittest.TestCase):
 
     def test_repeats_and_initial_window_boundary_are_not_new_updates(self):
         sender, receiver = self.inputs()
-        result = summarize(join_frames(sender, receiver, ClockCorrection()))
+        result = summarize(join_frames(sender, receiver, ClockCorrection(), visual_markers=True), visual_markers=True)
         self.assertEqual(result["received_frames"], 4)
         self.assertEqual(result["distinct_updates_after_first_marker"], 1)
         self.assertEqual(result["fresh_update_first_arrival_ms"]["render_start_to_decoded_ms"]["median"], 12)
         self.assertEqual(result["all_arrivals_including_repeats_ms"]["ndi_to_decoded_ms"]["median"], 2)
+
+    def test_default_measurement_needs_no_marker_and_deduplicates_desktop_repeats(self):
+        sender, receiver = self.inputs()
+        for row in receiver:
+            row.pop("render_marker_100ns")
+        # Repeated frames map the same QPC event to slightly different UTC values.
+        sender[1]["source_present_100ns"] = sender[0]["source_present_100ns"] + 1
+        sender[3]["source_present_100ns"] = sender[2]["source_present_100ns"] - 1
+        # The receiver missed frame 3: the next repeat is still its first arrival.
+        rows = join_frames(sender, receiver[:2] + receiver[3:], ClockCorrection())
+        result = summarize(rows)
+        self.assertEqual([row["first_arrival_of_update"] for row in rows], [False, False, True])
+        self.assertEqual(result["updates_after_initial_sample"], 1)
+        self.assertAlmostEqual(result["primary_latency_ms"]["median"], 9.0001)
+        self.assertNotIn("frames_without_valid_marker", result)
+        self.assertNotIn("render_start_to_decoded_ms", result["fresh_update_first_arrival_ms"])
+        self.assertNotIn("render_marker_100ns", rows[0])
+
+    def test_static_desktop_has_no_new_frame_latency_instead_of_aging_repeats(self):
+        sender, receiver = self.inputs()
+        for sample in sender[1:]:
+            sample["desktop_updated"] = False
+            sample["refreshed"] = False
+        result = summarize(join_frames(sender, receiver, ClockCorrection()))
+        self.assertEqual(result["updates_after_initial_sample"], 0)
+        self.assertIsNone(result["primary_latency_ms"])
 
     def test_receiver_minus_sender_offset_is_subtracted_with_drift(self):
         clock = ClockCorrection(self.calibration(9_000_000_000, 1000), self.calibration(11_000_000_000, 1002))
