@@ -1,4 +1,4 @@
-//! Desktop reference for the supplied APK's JPEG TCP/UDP framing.
+//! Reference receiver for FrameLink JPEG streams over TCP and UDP.
 use framelink::wire::{JpegStream, MAX_UDP_JPEG, validate_jpeg};
 use std::{
     io::{self, Read},

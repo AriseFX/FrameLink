@@ -81,9 +81,9 @@ def main():
                      (runtime_licenses[0], "NDI License Agreement.pdf"),
                      (runtime_licenses[1], "Processing.NDI.Lib.Licenses.txt"),
                      (root / "README.md", "README.md"),
+                     (root / "docs/使用说明.md", "docs/使用说明.md"),
                      (root / "docs/开发说明.md", "docs/开发说明.md"),
                      (root / "docs/传输协议.md", "docs/传输协议.md"),
-                     (root / "docs/validation/jpeg-loopback-2026-11-02.json", "docs/validation/jpeg-loopback-2026-11-02.json"),
                      (root / "tests/SingleInstanceVerification.ps1", "tests/SingleInstanceVerification.ps1"))
     for source, _ in package_files:
         if not source.is_file():
@@ -128,24 +128,26 @@ def main():
     (package / "build-info.json").write_text(json.dumps(info, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (package / "使用说明.txt").write_text(f"""FrameLink 帧连 {version} 开发测试版
 
-解压整个文件夹，启动 FrameLink.exe，保留同目录 NDI DLL。
-适用于 Windows 10 / 11 x64。NDI DLL 可能需要 VC++ 2015–2022 x64 运行库。
-默认中心512x512、240fps、关闭鼠标与预览；可选择640或在屏幕上框选。
-关闭窗口默认收到托盘并继续发送，双击托盘图标恢复，右键打开菜单（停止发送/退出）。
-再次双击 FrameLink.exe 或快捷方式会恢复并激活已有窗口，保留原发送任务和设置。
-升级到本版前请先退出旧版；单实例窗口恢复适用于原进程所在的交互桌面。
-首次启动优先导入上一版 Rust 设置，兼容旧 C++ INI，原文件保留。
-新设置保存到 %LOCALAPPDATA%\\FrameLink\\settings.toml。
-霜雪手机接收：选择 TCP / UDP，填写手机 IP 和监听端口（默认7878），手机端选择相同协议。
-TCP / UDP 发送 JPEG，无需 NDI DLL；质量默认75，UDP单张上限65507字节，超限请降低质量/尺寸或改TCP。
-协议按所提供7.18 APK静态分析适配，尚需手机实机验证。详见 docs/传输协议.md。
-多网卡电脑可在“发送网卡”指定有线网卡，点击“应用并重启”后开始发送。
-“自动选择”沿用原有 NDI 设置；指定网卡不保证降低延迟。
+适用于 Windows 10 / 11 x64。完整解压后运行 FrameLink.exe，升级前先退出旧版。
+MSVC 构建需要 Microsoft Visual C++ 2015–2022 x64 运行库。
 
-本包构建目标：{args.target}。构建主机与文件摘要见 build-info.json；界面截图见 docs/ui。
-Windows 实机运行、240fps稳态和双机延迟尚未验收。
-单实例验收脚本：tests/SingleInstanceVerification.ps1（尚未实机运行）。
-开发与验收说明：docs/开发说明.md。
+开始发送
+1. 选择显示器和采集区域。
+2. 选择协议：NDI 填写源名称；TCP / UDP 填写接收端 IP 和监听端口。
+3. 准备好接收端，点击“开始发送”。首次联网时允许所需的专用网络防火墙访问。
+
+NDI 模式需要同目录的 Processing.NDI.Lib.x64.dll，TCP / UDP 不加载该 DLL。
+TCP 连续发送 JPEG；UDP 一包一张 JPEG，单张上限 65,507 字节。
+默认采集中心 512 × 512 区域，请求帧率 240 fps，关闭鼠标与预览。
+实际帧率取决于画面更新、编码耗时和网络状况。
+
+关闭窗口默认收到托盘并继续发送。双击托盘图标恢复，右键菜单可停止发送或退出。
+设置自动保存到 %LOCALAPPDATA%\\FrameLink\\settings.toml。
+
+使用与常见问题：docs/使用说明.md
+接收端协议：docs/传输协议.md
+构建、测试与诊断：docs/开发说明.md
+构建目标：{args.target}，文件摘要见 build-info.json。
 """, encoding="utf-8")
     archive = package.parent / f"{package.name}.zip"
     temporary_archive=archive.with_suffix(".zip.tmp")

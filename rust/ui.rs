@@ -466,9 +466,9 @@ impl DesktopApp {
                         });
                         ui.label(
                             RichText::new(if self.config.transport == Transport::Tcp {
-                                "霜雪手机端选 TCP；填手机 IP 和监听端口。"
+                                "填写接收端 IP 和 TCP 监听端口。"
                             } else {
-                                "霜雪手机端选 UDP；单张 JPEG 需 ≤ 65507 字节。"
+                                "填写接收端地址；单张 JPEG 需 ≤ 65507 字节。"
                             })
                             .size(11.0)
                             .color(MUTED),
@@ -729,7 +729,7 @@ impl DesktopApp {
                                                 );
                                             });
                                     } else {
-                                        ui.label("JPEG 4:2:0（霜雪手机端）");
+                                        ui.label("JPEG 4:2:0");
                                     }
                                     ui.end_row();
                                 });
@@ -988,7 +988,7 @@ impl DesktopApp {
                     Transport::Tcp => "已建立的 TCP 连接",
                     Transport::Udp => "接收状态未知",
                 },
-                Some("NDI 显示 SDK 连接数。TCP 连接不代表手机已解码或推理；UDP 没有接收确认，无法判断手机是否在线。"),
+                Some("NDI 显示 SDK 连接数。TCP 连接不代表接收端已解码；UDP 没有接收确认，无法判断接收端是否在线。"),
             );
             let cost = self.stats.capture_ms + self.stats.conversion_ms + self.stats.submit_ms;
             metric(
@@ -1056,7 +1056,7 @@ impl DesktopApp {
                                 format!("在同一局域网内，选择源「{}」 · 点击复制", self.config.name)
                             } else {
                                 format!(
-                                    "{} → {} · 霜雪手机端网络接收",
+                                    "{} → {} · JPEG 视频流",
                                     self.config.transport.label(),
                                     self.config.destination
                                 )

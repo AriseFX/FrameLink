@@ -1,4 +1,4 @@
-//! JPEG framing used by the supplied 霜雪 7.18 APK (static analysis).
+//! FrameLink JPEG framing for TCP and UDP receivers.
 //! TCP: concatenated SOI..EOI images, no length or custom header.
 //! UDP: exactly one entire JPEG per datagram, no application fragmentation.
 pub const MAX_TCP_JPEG: usize = 2 * 1024 * 1024;
@@ -19,7 +19,7 @@ pub fn validate_jpeg(jpeg: &[u8], max: usize) -> Result<(), String> {
     Ok(())
 }
 
-/// Bounded reference receiver matching the APK's marker-based framing. Generated
+/// Bounded reference receiver for FrameLink's marker-based framing. Generated
 /// JPEGs contain no custom metadata; arbitrary metadata can contain marker bytes.
 #[derive(Default)]
 pub struct JpegStream {

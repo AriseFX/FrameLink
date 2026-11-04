@@ -452,7 +452,7 @@ mod windows_sender {
             "Diagnostic tracing adds timing and status collection overhead. Compare runs with the same diagnostics mode and configuration.",
         ];
         if config.transport != crate::model::Transport::Ndi {
-            notes.push("TCP/UDP uses the supplied Shuangxue APK JPEG protocol. conversion_ms includes JPEG encoding for changed frames. TCP connection count is not a delivery acknowledgement; UDP reports -1 (unknown). dropped counts only local abandoned UDP frames, not network loss.");
+            notes.push("TCP sends concatenated JPEG images; UDP sends one complete JPEG per datagram. conversion_ms includes JPEG encoding for changed frames. TCP connection count is not a delivery acknowledgement; UDP reports -1 (unknown). dropped counts only local abandoned UDP frames, not network loss.");
         }
         if !receiver_observed {
             notes.push(

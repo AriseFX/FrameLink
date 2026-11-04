@@ -1,4 +1,4 @@
-//! APK-compatible JPEG socket transport; no application video queue.
+//! JPEG socket transport over TCP and UDP; no application video queue.
 use crate::{
     model::{Config, Transport},
     wire::{MAX_TCP_JPEG, MAX_UDP_JPEG, validate_jpeg},
@@ -34,7 +34,7 @@ impl SocketSender {
         let socket = match config.transport {
             Transport::Tcp => {
                 let stream = TcpStream::connect_timeout(&destination, Duration::from_millis(500))
-                    .map_err(|e| format!("TCP 连接失败，请先启动手机网络接收：{e}"))?;
+                    .map_err(|e| format!("TCP 连接失败，请先启动接收端监听：{e}"))?;
                 stream.set_nodelay(true).map_err(|e| e.to_string())?;
                 stream
                     .set_write_timeout(Some(Duration::from_millis(5)))
@@ -113,7 +113,7 @@ impl SocketSender {
                 Ok(()) => Ok(true),
                 Err(_) if stop.load(Ordering::Acquire) => Ok(false),
                 Err(error) => Err(format!(
-                    "TCP 发送失败或超时，连接已停止，请检查带宽和手机接收后重新开始：{error}"
+                    "TCP 发送失败或超时，连接已停止，请检查网络和接收端后重新开始：{error}"
                 )),
             },
             Socket::Udp(socket) => loop {
@@ -276,7 +276,7 @@ mod tests {
         );
     }
     #[test]
-    fn tcp_apk_marker_parser_decodes_two_frames_and_reused_repeat() {
+    fn tcp_marker_parser_decodes_two_frames_and_reused_repeat() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let config = config(Transport::Tcp, listener.local_addr().unwrap());
         let receiver = std::thread::spawn(move || {
