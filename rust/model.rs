@@ -111,7 +111,7 @@ impl Default for Config {
                 height: 512,
             },
             preset: Some(512),
-            fps: 1000,
+            fps: 300,
             backend: Backend::Auto,
             pixel: PixelFormat::Nv12,
             gpu_nv12: false,
@@ -230,9 +230,9 @@ pub struct Stats {
 mod tests {
     use super::*;
     #[test]
-    fn new_configuration_uses_the_measured_low_latency_defaults() {
+    fn new_configuration_uses_fixed_rate_low_latency_defaults() {
         let config = Config::default();
-        assert_eq!(config.fps, 1000);
+        assert_eq!(config.fps, 300);
         assert!(config.precision);
         assert_eq!(config.backend, Backend::Auto);
         assert_eq!(config.pixel, PixelFormat::Nv12);

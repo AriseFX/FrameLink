@@ -193,7 +193,7 @@ mod tests {
             assert!(!saved.contains("unlimited"));
             assert_eq!(parse(&saved).unwrap().fps, 475);
         }
-        assert_eq!(parse("unlimited = true").unwrap().fps, 1000);
+        assert_eq!(parse("unlimited = true").unwrap().fps, 300);
     }
     #[test]
     fn custom_fixed_fps_survives_settings_round_trip() {
@@ -224,7 +224,7 @@ mod tests {
     #[test]
     fn defaults_and_existing_preferences_remain_distinct() {
         let fresh = parse("").unwrap();
-        assert_eq!(fresh.fps, 1000);
+        assert_eq!(fresh.fps, 300);
         assert!(fresh.precision);
         let upgraded =
             parse("retired_display_option = true\nfps = 475\nprecision = false").unwrap();

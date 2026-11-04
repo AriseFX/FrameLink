@@ -96,7 +96,7 @@ mod tests {
         assert_eq!(run.network_adapter, saved.network_adapter);
         parse(&["--fps", "120"]).unwrap().apply(&mut run).unwrap();
         assert_eq!(run.fps, 120);
-        assert_eq!(saved.fps, 1000);
+        assert_eq!(saved.fps, 300);
         assert_eq!(saved.pixel, PixelFormat::Nv12);
     }
     #[test]
